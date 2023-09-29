@@ -1,4 +1,4 @@
-# Meaningful title for the repository
+# Economic diversity and labour specialization in the Latin-speaking Roman Empire
 
 ## About
 [In two to three sentences state the purpose of this repository, e.g., The purpose of this repository is to provide templates for all future PSN repositories in order to save precious time and maintain high standards and uniformity of our documentation.]
