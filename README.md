@@ -6,15 +6,15 @@
 ## Authors 
 [alphabetic order, change for specific project]
 
-* Tom Brughmans [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-1589-7768), PSN, Aarhus University
 * Petra Hermankova [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-6349-0540), PSN, Aarhus University
 * Matteo Mazzamurro [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0009-0004-4454-1551), PSN, Aarhus University
+* Tom Brughmans [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-1589-7768), PSN, Aarhus University
 * [Name], [ORCID], [Institution], 
 * [Name], [ORCID], [Institution]
 * [Name], [ORCID], [Institution]
 
 ## Funding
-*The Past Social Networks Projects* is funded by the Carlsberg Foundation, Semper Ardens Accelerate no. XXX in 2022-2026. 
+*The Past Social Networks Projects* is funded by The Carlsberg Foundation’s Young Researcher Fellowship (CF21-0382) in 2022-2026.
 
 ## License
 CC-BY-SA 4.0, see attached [License.md](./License.md)
