@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+references:
+  - type: "software"
+authors: 
+  - affiliation: "Aarhus University"
+    family-names: "Heřmánková"
+    given-names: "Petra"
+    orcid: "https://orcid.org/0000-0002-6349-0540"
+  - affiliation: "Aarhus University"
+    family-names: "Mazzamurro"
+    given-names: "Matteo"
+    orcid: "https://orcid.org/0009-0004-4454-1551"
+  - affiliation: "Aarhus University"
+    family-names: "Brughmans"
+    given-names: "Tom"
+    orcid: "https://orcid.org/0000-0002-1589-7768"
+license: cc-by-nc-4.0
+repository-code: "https://github.com/past-networks/template_repo"
+title: "Social diversity in Latin epigraphy"
+version: 1.0
+date-released: 2023-10-16
+abstract: "Add abstract or description."
+keywords:
+  - "past social networks"
+  - "R"
+  - "digital epigraphy"
+  - "Roman economy"
+  - "Latin inscriptions"
+  - "Greek inscriptions"
+  - "uncertainty quantification"
