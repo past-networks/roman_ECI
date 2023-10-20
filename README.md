@@ -52,6 +52,6 @@ TBA
 
 ---
 
-<img src="./img/Main_banner.png" alt="Logo banner" "align="center" >
+<img src="./img/Main_banner.png" alt="Logo banner" >
 
 
