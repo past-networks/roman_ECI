@@ -1,0 +1,26 @@
+EDCS-ID,EDH-ID,type_of_inscription_auto,not_before,not_after,clean_text_interpretive_word,occups,occups_N,occups_cats_list
+EDCS-16000492,HD027088,,151.0,300.0,Deae Minervae Restitutus Gati filius Suessio aerarius votum solvit libens merito,['aerarius'],1,['Metal-Working']
+EDCS-11801053,HD049050,epitaph,171.0,230.0,Fortunato negotiatori artis cervesariae ONT MN,['negotiator'],1,['Retail']
+EDCS-20500303,HD047724,epitaph,,,Dis Manibus SPER IIIIII vir negotiator CISAR,['negotiator'],1,['Retail']
+EDCS-10600409,HD076371,votive inscription,151.0,300.0,In honorem domus divinae Genio arenariorum consistentium colonia Augusta Treverorum Axsillius Avitus sive Sacruna donum dedit,['arenarius'],1,['Performing Arts']
+EDCS-10600434,HD076429,votive inscription,1.0,300.0,In honorem domus divinae Moderatius Modestus us Ca negotiatores,['negotiator'],1,['Retail']
+EDCS-10600461,HD078352,epitaph,1.0,300.0,Iustio Muciano decurioni civitatis Treverorum duumviro aerarii publici et Rustio Muciano filio defunctis Aprilia Ursula coniunx viva sibi et Aprilia Paterna filia titulum faciendum curaverunt,['aerarius'],1,['Metal-Working']
+EDCS-10600469,HD078368,epitaph,101.0,300.0,Dis Manibus Eugeniae filiae defunctae Iulius Victor cuparius et saccarius et Acceptinae coniugi et Florentio filio vivis vivus fecit,['saccarius' 'cuparius'],2,"['Transport', 'Metal-Working']"
+EDCS-10600470,HD078370,epitaph,101.0,300.0,Dis Manibus Secundiniae Tavenae coniugi defunctae A us A ius faber sibi et suis vivus fecit,['faber'],1,['Unclassified']
+EDCS-10600472,HD078372,epitaph,1.0,300.0,coniugi negotiatori artis R sibi viva fecit,['negotiator'],1,['Retail']
+EDCS-10600473,HD077341,epitaph,351.0,400.0,Silvanus negotiator hic pausat in pace,['negotiator'],1,['Retail']
+EDCS-12000749,HD076322,votive inscription,268.0,300.0,In honorem domus divinae deae Dianae Numini Sanctissimo Anulinus Polibius nummularius sacrae monetae Augusti nostri ex voto posuit votum solvit libens merito,['nummularius'],1,['Finance']
+EDCS-12000751,HD020615,votive inscription,161.0,211.0,Numinibus Augustorum deo Intarabo et Genio collegii fabrorum dolabrariorum quibus splendidissimus ordo templum sicut consaeptum est au curam agente Magissio Maina tum praefecto eorum decuria I Borinius Meritus Latinius Veco Covirius Saturn Iulius Sevianus Arvescius Nitius Mercatorius I Quad I II Ioincionius Securius I Mainutius Ner Quintius III So manius Lucinus Ioincionius Cossus Ilvatius Primanus Mansuetius Primus Dagissius AI I inus Excingonius Secundus Covirius Tertius Secundius Secundinus Mainutius Silvinus Secundius Primus I A I I issius A IIOTLG Messorius Primus Iulius saN Blussinius Sennaugus Victorius Rusticus Iulius Lallus Secundius Secundinus VI VOIIV Vi alti I iallus Drappus Maciatus ustic us va H ciaNus ammiN SOIV S AV I C decuria II Lal III I C I CI BeIbu II II OII Romac I r Secundius Ibli Secundius Ses Lugissius,['faber dolabrarius'],1,['Metal-Working']
+EDCS-12000757,HD027465,,,,Dis Manibus Antonius Capurillus cervesarius CIE,['cervesarius'],1,['Food-Production']
+EDCS-30100436,HD077031,epitaph,451.0,460.0,Quam bene concordes divina potentia iungit membra sacerdotum quae ornat locus iste duorum Eucharium loquitur Valerium que simul sedem victuris gaudens componere membris fratribus hoc sanctis ponens altare Cyrillus corporis hospitium sanctus metator adornat,['metator'],1,['Miscellaneous Services']
+EDCS-11201764,HD023872,votive inscription,201.0,300.0,miles classis Germanicae Antoninianae piae fidelis negotiator cervesarius artis offecturae ex voto pro meritis posuit,['negotiator cervesarius'],1,['Retail']
+EDCS-10900237,HD076470,epitaph,201.0,300.0,Desideratio E ENICIO artis cretariae Ilixo faciendum curavit,['cretaria'],1,['Retail']
+,HD078768,epitaph,651.0,750.0,In h lt o gt c loco recqui lt e gt sc lt i gt t vir venera lt biE gt lis Rustecius arcarius ex cive Gabaletana prior omnium art lt i gt f lt i gt cum magister qui MPV Terti admiremur so,['arcarius'],1,['Finance']
+,HD078992,identification inscription,151.0,200.0,macellarii cauponem est,['macellarius' 'caupo'],2,"['Food-Production', 'Retail']"
+EDCS-30301494,,,,,Qui gradiens pelagi fluctus compressit amaros vivere qui praestat morientia semina terrae solvere qui potuit legalia vincula mortis post tenebras fratrem post tristia lumina solis ad superos iterum Maarthae donare sorori post cineres Ericum faciet quia surgere credo Christe redemptor parce fideli Erico qui corpore multas post se reliquit lacrimas,['redemptor'],1,['Food-Production']
+EDCS-75000283,,,,,Cnaei A Ingenui V artificis vitriarii manu S,['vitriarius' 'artifex'],2,"['Glass-Working', 'Plastic Arts']"
+EDCS-75000284,,,,,Cnaei A Ingenui V artificis vitriarii manu S,['vitriarius' 'artifex'],2,"['Glass-Working', 'Plastic Arts']"
+EDCS-74900117,,,,,Cnaei A Ingenui V artificis vitriarii manu A,['vitriarius' 'artifex'],2,"['Glass-Working', 'Plastic Arts']"
+EDCS-48700048,,identification inscription,,,cellarii ponem est,['cellarius'],1,['Household Goods']
+EDCS-73400019,,epitaph,651.0,750.0,In hoc loco requiescit vir venerabiElis Rustecius arcarius ex cive Gabaletana prior omnium artificum magister qui MPV Terti admiremur so,['arcarius' 'artifex'],2,"['Finance', 'Plastic Arts']"
+EDCS-73400286,,,151.0,200.0,macellarii cauponem est,['macellarius' 'caupo'],2,"['Food-Production', 'Retail']"

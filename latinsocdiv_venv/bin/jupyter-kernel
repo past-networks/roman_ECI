@@ -1,4 +1,4 @@
-#!/home/petra/Github/latin_socdiv/latinsocdiv_venv/bin/python
+#!/home/au648560/Github/latin_socdiv/latinsocdiv_venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
