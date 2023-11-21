@@ -41,8 +41,11 @@ CC-BY-SA 4.0, see attached [License.md](./License.md)
 ## Virtual environment
 
 `pip install virtualenv
+
 virtualenv latinsocdiv_venv 
+
 latinsocdiv_venv/bin/python -m pip install -r requirements.txt # install anything in requirements.txt
+
 latinsocdiv_venv/bin/python -m ipykernel install --user --name=latinsocdiv_venv`
 
 
