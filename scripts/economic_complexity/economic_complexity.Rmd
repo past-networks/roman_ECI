@@ -1,0 +1,676 @@
+---
+title: "economic_complexity"
+author: "Matteo Mazzamurro"
+date: "2024-03-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+This R markdown allows to reproduce the preliminary steps to study the economic complexity of the Roman empire.
+The input data are the (Latin) inscriptions containing occupational information.
+The output are tables of occupation counts per geographic unit, before and after the correction of uncertainty and biases.
+
+# Structure
+The document is structured as follows:
+* Preliminaries: 
+  Loading the necessary packages and data.
+* Defining consistent occupational units by standardizing the spelling. 
+* Defining different geographical units: modern countries, Roman provinces, cities.
+* Create the tables of occupational counts per geographical units.
+* Deal with the uncertainty and biases in the datasets.
+
+# Preliminaries
+## Packages
+The following libraries are required.
+```{r List required packages}
+required_packages <- c("jsonlite",     # read json files
+                       "arrow",        # read parquet files
+                       "tidyverse",    # data cleaning and visualisation
+                       "stringi",      # handle strings for spelling standardisation
+                       "sf",           # load and handle spatial files
+                       "raster",       # handle spatial files
+                       "units",        # add physical units for geographic comparison
+                       "ggspatial")    # additional plot features for spatial data
+```
+
+One needs to install them if they have not been installed yet.
+```{r Install missing packages}
+packages_to_install <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if(length(packages_to_install)) install.packages(packages_to_install)
+```
+
+Finally, one needs to load them.
+```{r Load required packages}
+invisible(lapply(required_packages, library, character.only = TRUE))
+```
+
+Note that we use the following versions of the packages:
+* jsonlite    : 1.8.7
+* arrow       : 15.0.1
+* tidyverse   : 2.0.0
+* stringi     : 1.7.12
+* sf          : 1.0.15
+* raster      : 3.6.26
+* units       : 0.8.2
+* ggspatial   : 1.1.9
+These were loaded in the R version 4.3.0.
+
+To check your version of an installed package and R, you may use the following commands.
+```{r check R and package version}
+# R version
+R.version
+
+# example package version
+packageVersion("tidyverse")
+```
+
+If a package has been updated since the release of this code, using the newer version may cause issues.
+
+If the installed version is causing issues, one can try to solve them by installing the specific versions of the packages by uncommenting and running the following code. 
+Note, however, that these older versions of the packages may not be available for newer versions of R, in which case it will be necessary to switch to an older version of R to run the code (please refer to the cran.r website on how to do that: https://cran.r-project.org/index.html).
+
+```{r}
+# #install devtools if not already installed
+# if (!"devtools" %in% installed.packages()[,"Package"]) install.packages("devtools")
+# 
+# #load devtools
+# library(devtools)
+# 
+# #install specific versions of the packages
+# install_version("jsonlite", version = "1.8.7")
+# install_version("arrow", version = "15.0.1")
+# install_version("tidyverse", version = "2.0.0")
+# install_version("stringi", version = "1.7.12")
+# install_version("sf", version = "1.0.15")
+# install_version("raster", version = "3.6.26")
+# install_version("units", version = "0.8.2")
+# install_version("ggspatial", version = "1.1.9")
+# 
+# #load packages
+# invisible(lapply(required_packages, library, character.only = TRUE))
+```
+
+## Data
+Read the data on inscriptions and standardised spelling
+```{r read data on inscriptions}
+# inscriptions
+inscriptions <- read_parquet("../../data/economic_complexity/LIST_occupsorgs_industry_simple_20231206.parquet")
+
+# occupations to merge 
+occupations_all <- read_delim("../../data/economic_complexity/occupations.csv", delim=";")
+occupations_to_merge <- read_delim("../../data/economic_complexity/occupations_to_merge.csv", delim=";")
+```
+
+Read the data on geographical units
+```{r geographical data}
+# cities based on Hanson's dataset
+cities <- st_read("../../data/economic_complexity/roman_cities_pop.geojson")
+
+# Roman provinces (digitised and corrected by Adam Pažout)
+## read the data
+provinces <- read_sf("../../data/economic_complexity/roman_provinces_cleaned/roman_provinces_foranalysisdissolved.shp")
+## transform it in a relevant coordinate reference system
+provinces <- st_transform(provinces, crs=crs("epsg:4326"))
+## delete Roma since it lies inside Latium
+provinces <- provinces[!provinces$province=="Roma",]
+## delete unnecessary columns for our scopes
+provinces <- provinces[,c("province","geometry")]
+
+# country borders (https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp)
+## read the data
+world_sf <- read_sf('../../data/economic_complexity/world-administrative-boundaries/world-administrative-boundaries.shp') 
+## dissolve the administrative boundaries for visualisation purposes
+world_no_borders_sf <- st_union(world_sf) 
+```
+
+# Occupational units
+First, select only the inscriptions containing information on occupations
+```{r select inscriptions with occupations}
+inscriptions_w_occupations <- inscriptions[inscriptions$occups_N>0,]
+```
+
+Add a standard spelling column to the occupations.
+```{r standardise occupation spelling}
+#initialise column of standard spelling 
+occupations_all$std_spelling <- NA
+
+for (i in seq(nrow(occupations_all))) {
+  occ_term <- occupations_all$Term[i]
+  # for an occupational term, see if it needs to be merged 
+  occ_word_match <- str_detect(occ_term,occupations_to_merge$To_be_merged)
+  # in case it does, merge it, otherwise, the term itself is the standard spelling
+  occupations_all$std_spelling[i] <- ifelse(any(occ_word_match),
+         occupations_to_merge$Main_term[occ_word_match],
+         occ_term)
+}
+
+# select only necessary columns
+occupations_dictionary <- unique(occupations_all[,c("Term","std_spelling")])
+
+# initialise new column of standard spelling for occupations in inscriptions
+inscriptions_w_occupations$occups_std <- rep(list(NA),nrow(inscriptions_w_occupations))
+
+for (i in seq(nrow(inscriptions_w_occupations))){
+  # extract an inscription
+  inscription <- inscriptions_w_occupations[i,]
+  # find the occupations in the inscription and associate it with the standard spellings
+  inscription_occ <- data.frame(Term=unlist(inscription$occups)) %>%
+    left_join(occupations_dictionary,
+              by = "Term")
+  # save the standard spellings for the occupations in the inscription
+  inscriptions_w_occupations$occups_std[[i]] <- inscription_occ$std_spelling
+}
+```
+
+# Geographical units
+Note that naive methods (e.g., using a cell raster) do not work, as each geographical unit must have at least one inscription and the data is very sparse.
+
+As a first step, convert the inscriptions into a sf
+```{r create sf of inscriptions}
+inscriptions_w_occupations_sf <- st_as_sf(inscriptions_w_occupations,
+                                          coords = c("Longitude","Latitude"),
+                                          crs = crs("epsg:4326"))
+```
+
+## Modern countries
+Associate the inscriptions to the corresponding (closest) country
+```{r inscriptions in countries}
+inscriptions_coordinates <- data.frame(st_coordinates(inscriptions_w_occupations_sf)) %>% 
+  setNames(c("Longitude","Latitude"))
+
+inscriptions_in_countries <- cbind(inscriptions_w_occupations_sf,
+                                   country = world_sf$iso3[st_nearest_feature(inscriptions_w_occupations_sf,world_sf)],
+                                   inscriptions_coordinates)
+```
+
+Visual check: represent the inscriptions as points on a map and colour them according to the province they are assigned to
+```{r visualise distribution of inscriptions by country}
+# base map
+inscriptions_by_country_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = inscriptions_in_countries,
+             aes(color = country)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(inscriptions_coordinates$Longitude), 
+                    max(inscriptions_coordinates$Longitude)), 
+           ylim = c(min(inscriptions_coordinates$Latitude), 
+                    max(inscriptions_coordinates$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(inscriptions_by_country_plot)
+#ggsave("../../figures/economic_complexity/inscriptions_by_country.pdf", inscriptions_by_country_plot, width = 7, height = 5.5)
+#ggsave("../../figures/economic_complexity/inscriptions_by_country.jpeg", inscriptions_by_country_plot, width = 7, height = 5.5, dpi = 300)
+```
+
+One inscription lies in Norway, which is very suspicious. Create another file without it
+```{r delete inscription in Norway and plot}
+inscriptions_in_countries_no_Norway <- inscriptions_in_countries[!inscriptions_in_countries$country=="NOR",]
+
+# base map
+inscriptions_by_country_no_Norway_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = inscriptions_in_countries_no_Norway,
+             aes(color = country)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(inscriptions_in_countries_no_Norway$Longitude), 
+                    max(inscriptions_in_countries_no_Norway$Longitude)), 
+           ylim = c(min(inscriptions_in_countries_no_Norway$Latitude), 
+                    max(inscriptions_in_countries_no_Norway$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(inscriptions_by_country_no_Norway_plot)
+#ggsave("../../figures/economic_complexity/inscriptions_by_country_no_Norway.pdf", inscriptions_by_country_no_Norway_plot, width = 10, height = 5.5)
+#ggsave("../../figures/economic_complexity/inscriptions_by_country_no_Norway.jpeg", inscriptions_by_country_no_Norway_plot, width = 10, height = 5.5, dpi = 300)
+```
+
+## Roman provinces
+Repeat the same process using as geographical units the Roman provinces at Trajan's time.
+Note that province borders were constantly shifting, so this choice is in principle not more meaningful than using modern country borders.
+
+Associate each inscription to the province in which it falls
+```{r inscriptions in provinces}
+inscriptions_in_provinces <- st_join(inscriptions_w_occupations_sf, provinces)
+inscriptions_in_provinces$Latitude <- inscriptions_w_occupations$Latitude
+inscriptions_in_provinces$Longitude <- inscriptions_w_occupations$Longitude
+```
+
+Notice that 72 inscriptions lie outside of the borders of the provinces.
+```{r inscriptions without a province}
+unassigned_inscriptions_index <- which(is.na(inscriptions_in_provinces$province))
+unassigned_inscriptions <- inscriptions_w_occupations[unassigned_inscriptions_index,]
+unassigned_inscriptions_sf <- st_as_sf(unassigned_inscriptions,
+                                       coords = c("Longitude","Latitude"),
+                                       crs = crs("epsg:4326"))
+```
+
+Quick plot of the points to see their distribution
+```{r plot inscriptions without a province}
+# base map
+plot(provinces$geometry, 
+     xlim = c(min(inscriptions_w_occupations$Longitude),
+              max(inscriptions_w_occupations$Longitude)),
+     ylim = c(min(inscriptions_w_occupations$Latitude),
+              max(inscriptions_w_occupations$Latitude)))
+# show in red the points not associated with any province
+points(unassigned_inscriptions$Longitude,
+       unassigned_inscriptions$Latitude,
+       col="red")
+```
+
+For some of these, this is simply a problem of the precision of the shapefile.
+This is the case of inscriptions near the coast or northern border, or for inscriptions on the Balearic islands (which are not part of the shapefile of provinces)
+For others, they lie outside of our area of interest and it is not possible to assign them a priori to a province on the basis of this shapefile only.
+One needs to deal with these on a case by case scenario, considering the limitations of the data and of the shapefile.
+
+Find the closest province to each unassigned inscription and compute the distance
+```{r closest province to each unassigned inscription}
+# province index
+closest_province_index <- st_nearest_feature(unassigned_inscriptions_sf,provinces)
+# assign name of the closest province 
+unassigned_inscriptions$closest_province <- provinces$province[closest_province_index]
+# compute distance to the closest province
+unassigned_inscriptions$distance_to_province <- st_distance(
+  unassigned_inscriptions_sf,
+  provinces[closest_province_index,],
+  by_element = TRUE)
+```
+
+Automatically assign a point to a province if the distance is smaller than 50km.
+This is a relatively arbitrary threshold, corresponding to the minimal threshold that allows to deal with most of the aforementioned cases of clear lack of assignment while leaving out ambiguous or clearly wrong ones as determined by visual inspection.
+```{r assign very close inscriptions to closest province}
+inscriptions_in_provinces$province[unassigned_inscriptions_index] <- ifelse(
+  unassigned_inscriptions$distance_to_province < set_units(50000,"meters"),
+  unassigned_inscriptions$closest_province,
+  NA
+)
+```
+
+Manually assign the case of the Balearic islands
+```{r assign Balearic inscriptions to Hispania Citerior}
+Balearic_inscriptions_id <- unassigned_inscriptions[unassigned_inscriptions$closest_province=="Hispania Citerior","LIST-ID"]
+inscriptions_in_provinces$province[inscriptions_in_provinces$`LIST-ID` %in% Balearic_inscriptions_id$`LIST-ID`] <- "Hispania Citerior"
+```
+
+Unclear cases beyond the border are manually classified as either "Eastern border" or "North-eastern border", with the exception of the isolated case in Norway, that is dropped. This is debatable, but should have limited impact on the analysis
+```{r categorise/clean outlier inscriptions}
+# Eastern border
+Eastern_inscriptions <- unassigned_inscriptions[unassigned_inscriptions$Longitude > 40,"LIST-ID"]
+inscriptions_in_provinces$province[inscriptions_in_provinces$`LIST-ID` %in% Eastern_inscriptions$`LIST-ID`] <- "Eastern border"
+
+# update unassigned inscriptions
+remaining_unassigned_inscriptions <- inscriptions_w_occupations[which(is.na(inscriptions_in_provinces$province)),]
+
+# North Eastern border
+North_easter_inscriptions <- remaining_unassigned_inscriptions[remaining_unassigned_inscriptions$Latitude < 60,"LIST-ID"]
+inscriptions_in_provinces$province[inscriptions_in_provinces$`LIST-ID` %in% North_easter_inscriptions$`LIST-ID`] <- "North-eastern border"
+
+# delete outlier
+inscriptions_in_provinces <- inscriptions_in_provinces[!is.na(inscriptions_in_provinces$province),]
+```
+
+Visual check: represent the inscriptions as points on a map and colour them according to the province they are assigned to.
+```{r visualise distribution of inscriptions by province}
+# base map
+inscriptions_by_province_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = inscriptions_in_provinces,
+             aes(color = province)) +
+  #geom_point(data = inscriptions_in_provinces,
+  #           aes(x = Longitude,
+  #               y = Latitude,
+  #               color = province)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(inscriptions_in_provinces$Longitude), 
+                    max(inscriptions_in_provinces$Longitude)), 
+           ylim = c(min(inscriptions_in_provinces$Latitude), 
+                    max(inscriptions_in_provinces$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(inscriptions_by_province_plot)
+#ggsave("figures/economic_complexity/inscriptions_by_province.pdf", inscriptions_by_province_plot, width = 15, height = 5.5)
+#ggsave("figures/economic_complexity/inscriptions_by_province.jpeg", inscriptions_by_province_plot, width = 15, height = 5.5, dpi = 300)
+```
+
+## Urban inscriptions
+Associate each inscription to the closest town in the Pleiades data set
+```{r find and associate each inscription to the closest town}
+# find closest city
+nearest_city_index = st_nearest_feature(inscriptions_w_occupations_sf, cities)
+
+# initialise inscription to closest city sf
+inscriptions_in_cities <- cbind(inscriptions_w_occupations_sf,
+                                nearest_city_key = cities$Primary.Key[nearest_city_index],
+                                nearest_city_ancient_toponym = cities$Ancient.Toponym[nearest_city_index],
+                                nearest_city_modern_toponym = cities$Modern.Toponym[nearest_city_index],
+                                nearest_city_pop_est = cities$pop_est[nearest_city_index],
+                                nearest_city_area = cities$Area[nearest_city_index],
+                                inscriptions_coordinates)
+
+# associate the distance
+inscriptions_in_cities$distance_to_city <- st_distance(
+  inscriptions_in_cities,
+  cities[nearest_city_index,],
+  by_element = TRUE)
+```
+
+Assign an inscription to a city if the distance is below a certain threshold.
+First consider the case when the threshold is an arbitrary distance from the city (from very small to max 1h walk) 
+```{r assign cities if within a certain arbitrary threshold}
+# arbitrary threshold
+thresholds <- c(500,1000,2000,5000) #max 1h walking from the centre
+
+# initialise columns
+inscriptions_in_cities <- cbind(inscriptions_in_cities,
+                                data.frame(matrix(NA,ncol=4)) %>% 
+                                  setNames(
+                                    paste0("city_",thresholds)
+                                    )
+                                )
+
+# assign cities only if within a certain threshold
+for (t in thresholds){
+  inscriptions_in_cities[paste0("city_",t)] <- ifelse(
+    inscriptions_in_cities$distance_to_city < set_units(t,"meters"),
+    inscriptions_in_cities$nearest_city_key,
+    "rural"
+  )
+}
+```
+
+The consider slighly more sophisticated or area-dependent threshold: i.e., a threshold that corresponds to an estimate of the city's radius based on its area.
+The area is expressed in hectars in Hanson's database. 
+1 hectare is 10000 square meters (i.e., a square 100mx100m).
+First, convert the hectar into square meters
+Then compute the radius of a circle of a given area using the inverse formula of the area r = sqrt(A/pi).
+
+Remark that when the area is NA, the population is assigned an arbitrary value of 1000. 
+For cities with a population of 1000 whose area is indicated, the area is between 1 and 10 hectares, with a mean of approx 6.9 (and similar median of 7). 
+Here, the mean value is taken as the radius. 
+A sensitivity analysis should follow.
+
+```{r assign city if within an area-dependent threshold}
+# average radius for cities with 1000 people
+mean_area_1000people <- mean(na.omit(cities$Area[cities$pop_est==1000]))
+
+# define appropriate threshold for each city 
+area_based_threshold <- ifelse(
+  !is.na(inscriptions_in_cities$nearest_city_area),
+  sqrt(inscriptions_in_cities$nearest_city_area*10000/pi),
+  sqrt(mean_area_1000people*10000/pi)
+)
+
+# assign cities based on area-based threshold
+inscriptions_in_cities$city_area_based <- ifelse(
+  inscriptions_in_cities$distance_to_city < set_units(area_based_threshold,"meters"),
+  inscriptions_in_cities$nearest_city_key,
+  "rural"
+)
+```
+ 
+Hence, one has a classification of the urban occupation-related inscriptions. 
+Note that this is a subset of all the occupation-related inscriptions.
+```{r county urban inscriptions}
+print(
+  paste0("Total count of urban inscriptions by threshold. ",
+        "Area-adapted threshold: ",
+        length(inscriptions_in_cities$city_area_based[!inscriptions_in_cities$city_area_based=="rural"]),
+        ", 500m: ",
+        length(inscriptions_in_cities$city_500[inscriptions_in_cities$city_500=="rural"]),
+        ", 1000m: ",
+        length(na.omit(inscriptions_in_cities$city_1000[inscriptions_in_cities$city_1000=="rural"])),
+        ", 2000m: ",
+        length(na.omit(inscriptions_in_cities$city_2000[inscriptions_in_cities$city_2000=="rural"])),
+        ", 5000m: ",
+        length(na.omit(inscriptions_in_cities$city_5000[inscriptions_in_cities$city_5000=="rural"]))
+  )
+)
+```
+
+# Table of occupations
+Now, build the table of occupations per geographic unit depending on the choice of the latter.
+## Country
+Prepare the data in the correct format by unlisting the occupations in each inscription
+```{r unnest the df}
+# unnest the df based on the standard names
+inscriptions_in_countries_no_Norway_unnested <- unnest(inscriptions_in_countries_no_Norway,"occups_std")
+```
+
+Define the row and column names, in this case the countries and the occupations respectively.
+```{r country table construction: row and column names}
+# col names (occupations, sorted by frequency)
+col_names_c <- names(
+  sort(
+    table(
+      inscriptions_in_countries_no_Norway_unnested$occups_std),
+    decreasing=TRUE)
+  )
+
+# row names (countries, sorted by total counts)
+row_names_c <- names(
+  sort(
+    table(
+      inscriptions_in_countries_no_Norway_unnested$country),
+    decreasing=TRUE)
+  )
+```
+
+Then, define the table of frequencies of occupations by country.
+```{r country table definition}
+# initialisation
+country_table <- table(inscriptions_in_countries_no_Norway_unnested$country,
+                        inscriptions_in_countries_no_Norway_unnested$occups_std)
+
+# sort based on row and column counts
+country_table <- country_table[row_names_c,col_names_c]
+```
+
+Represent the table as a heatmap. Note that due to the extreme concentration of inscriptions and occupations in some provinces, here the log of the frequency is shown.
+```{r country heatmap}
+# Convert the table to a dataframe
+country_table_heatmap <- as.data.frame(country_table) %>% setNames(c("country","occupation","frequency"))
+country_table_heatmap$log_frequency <- log(country_table_heatmap$frequency)
+
+country_table_heatmap_plot <- ggplot(country_table_heatmap, aes(occupation, country, fill=log_frequency)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(x = "occupation", 
+       y = "country", 
+       fill ="log(frequency)",
+       title = "Frequency of occupations in inscriptions by country") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
+```
+
+Finally, save the results.
+```{r save results}
+#write.csv(country_table,"../../results/economic_complexity/country_table.csv")
+#ggsave("../../figures/economic_complexity/country_table_heatmap.pdf", country_table_heatmap_plot, width = 15, height = 10)
+#ggsave("../../figures/economic_complexity/country_table_heatmap.jpeg", country_table_heatmap_plot, width = 15, height = 10, dpi = 300)
+```
+
+
+## Province
+Repeat the same process as above for provinces. 
+Start by unlisting the occupation data for each inscription
+```{r unnest the df}
+# unnest the df based on the standard names
+inscriptions_in_provinces_unnested <- unnest(inscriptions_in_provinces,"occups_std")
+```
+
+Define the row and column names, in this case the provinces and the occupations respectively.
+```{r country table construction: row and column names}
+# col names (occupations, sorted by frequency)
+col_names_p <- names(
+  sort(
+    table(
+      inscriptions_in_provinces_unnested$occups_std),
+    decreasing=TRUE)
+  )
+
+# row names (countries, sorted by total counts)
+row_names_p <- names(
+  sort(
+    table(
+      inscriptions_in_provinces_unnested$province),
+    decreasing=TRUE)
+  )
+```
+
+Define the frequency table of occupations by province.
+```{r country table definition}
+# initialisation
+province_table <- table(inscriptions_in_provinces_unnested$province,
+                        inscriptions_in_provinces_unnested$occups_std)
+
+# sort based on row and column counts
+province_table <- province_table[row_names_p,col_names_p]
+```
+
+Represent the table as a heatmap. Note that due to the extreme concentration of inscriptions and occupations in some provinces, here the log of the frequency is shown.
+```{r province heatmap}
+province_table_heatmap <- as.data.frame(province_table) %>% setNames(c("province","occupation","frequency"))
+province_table_heatmap$log_frequency <- log(province_table_heatmap$frequency)
+
+province_table_heatmap_plot <- ggplot(province_table_heatmap, aes(occupation, province, fill=log_frequency)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(x = "occupation", 
+       y = "province", 
+       fill ="log(frequency)",
+       title = "Frequency of occupations in inscriptions by province") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
+
+print(province_table_heatmap_plot)
+```
+
+Finally, save the results
+```{r save results}
+#write.csv(province_table,"../../results/economic_complexity/province_table.csv")
+#ggsave("../../figures/economic_complexity/province_table_heatmap.pdf", province_table_heatmap_plot, width = 15, height = 10)
+#ggsave("../../figures/economic_complexity/province_table_heatmap.jpeg", province_table_heatmap_plot, width = 15, height = 10, dpi = 300)
+```
+
+## Cities
+For the cities, one needs to deal with the different radii used in assigning an inscription to a city. Use a function for conciseness.
+```{r function to plot occupation structure based on threshold}
+cities_table_heapmap_by_threshold <- function(t){
+  if (!t %in% c(thresholds,"area_based")){
+    stop("The threshold value must '500', '1000', '2000', '5000' or 'area_based'",
+         call. = F)
+  }
+  
+  # select column depending on threshold choice
+  city_col <- paste0("city_",t)
+  # exclude rural inscriptions
+  inscriptions_in_cities_no_rural <- inscriptions_in_cities[!inscriptions_in_cities[[city_col]]=="rural",]
+  # unnest the list
+  inscriptions_in_cities_unnested <- unnest(inscriptions_in_cities_no_rural,"occups_std")
+
+  # col names (occupations, sorted by frequency)
+  col_names_c <- names(
+  sort(
+    table(
+      inscriptions_in_cities_unnested$occups_std),
+    decreasing=TRUE)
+  )
+
+  # row names (countries, sorted by total counts)
+  row_names_c <- names(
+  sort(
+    table(
+      inscriptions_in_cities_unnested[[city_col]]),
+    decreasing=TRUE)
+  )
+  
+  # define table
+  # initialisation
+  cities_table <- table(inscriptions_in_cities_unnested[[city_col]],
+                        inscriptions_in_cities_unnested$occups_std)
+
+  # sort based on row and column counts
+  cities_table <- cities_table[row_names_c,col_names_c]
+  
+  # heatmap
+  cities_table_heatmap <- as.data.frame(cities_table) %>% setNames(c("city_ID","occupation","frequency"))
+  cities_table_heatmap$log_frequency <- log(cities_table_heatmap$frequency)
+  cities_table_heatmap <- left_join(cities_table_heatmap,
+                                    cities[,c("Primary.Key","Ancient.Toponym")],
+                                    by = join_by(city_ID==Primary.Key)) %>%
+    setNames(c("city_ID","occupation","frequency","log_frequency","ancient_toponym","geometry")) 
+    
+  cities_table_heatmap$city_ID <- factor(cities_table_heatmap$city_ID, 
+                                 row_names_c)
+  cities_table_heatmap$occupation <- factor(cities_table_heatmap$occupation, 
+                                 col_names_c)
+  
+  heatmap_plot <- ggplot(cities_table_heatmap, aes(occupation, city_ID, fill=log_frequency)) + 
+    geom_tile() +
+    scale_fill_gradient(low = "white", high = "red") +
+    labs(x = "occupation", 
+         y = "city ID", 
+         fill ="log(frequency)",
+         title = paste0("Frequency of occupations in inscriptions by city. Threshold: ",t)) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2),
+          axis.text.y = element_text(size = 2))
+  
+  # save results
+  #write.csv(cities_table,paste0("../../results/economic_complexity/cities_table_threshold_",t,".csv"))
+  #ggsave(paste0("../../figures/economic_complexity/heatmap_cities_",t,".pdf"), heatmap_plot, width = 15, height = 10)
+  #ggsave(paste0("../../figures/economic_complexity/heatmap_cities_",t,".jpeg"), heatmap_plot, width = 15, height = 10, dpi = 300)
+  
+  # visualise them
+  print(heatmap_plot)
+  return(cities_table)
+}
+```
+
+Run the function to output and save the results.
+```{r run the above function}
+cities_table_list <- list()
+for (t in c(thresholds,"area_based")) {
+  cities_table_t <- cities_table_heapmap_by_threshold(t)
+  cities_table_list <- append(cities_table_list,
+                              cities_table_t)
+}
+```
+
+# Uncertainty and biases TO DO
