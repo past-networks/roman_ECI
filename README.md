@@ -27,6 +27,9 @@ CC-BY-SA 4.0, see attached [License.md](./License.md)
 - consists of 525,870 inscriptions, enriched by 65 attributes. 77,091 inscriptions are overlapping between the two source datasets (i.e. EDH and EDCS); 3,316 inscriptions are exclusively from EDH; 445,463 inscriptions are exclusively from EDCS. 511,973 inscriptions have valid geospatial coordinates (the geometry attribute). This information is also used to determine the urban context of each inscription (i.e. whether it is in the neighbourhood (i.e. within a 5000m buffer) of a large city, medium city, or small city or rural (>5000m to any type of city; see the attributes urban_context, urban_context_city, and urban_context_pop). 206,570 inscriptions have a numerical date of origin expressed using an interval or singular year using the attributes not_before and not_after. The dataset also employs a machine learning model to classify the inscriptions covered exclusively by EDCS in terms of 22 categories employed by EDH, see Kaše, Heřmánková, Sobotkova 2021.
 - Citation: `Vojtěch Kaše, Petra Heřmánková, & Adéla Sobotková. (2023). LIST (v1.0) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.8431323`
 
+2. Geographic units data to compute economic complexity
+- countries: download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp
+- provinces: shapefile created by Adam Pažout
 
 ## Scripts
 [_Describe what individual scripts do, provide links to them, and order them in a sequence they should run. Point to any issues or specific settings people should be aware of._]
@@ -36,6 +39,8 @@ CC-BY-SA 4.0, see attached [License.md](./License.md)
 2. Scripts in the folder `networks`:
 
 - 1_OCCUPATIONAL-NETWORKS - published by `Kaše V, Heřmánková P, Sobotková A (2022) Division of labor, specialization and diversity in the ancient Roman cities: A quantitative approach to Latin epigraphy. PLoS ONE 17(6): e0269869. https://doi.org/10.1371/journal.pone.0269869` under a CC BY-SA 4.0 International License. https://github.com/sdam-au/social_diversity
+
+3. Scripts in folder `economic_complexity`: R scripts not released and UNDER DEVELOPMENT
 
 
 ## Virtual environment
