@@ -94,7 +94,7 @@ Note, however, that these older versions of the packages may not be available fo
 # invisible(lapply(required_packages, library, character.only = TRUE))
 ```
 
-## Data
+## Data TO MODIFY WITH CORRECT PATHS
 Read the data on inscriptions and standardised spelling
 ```{r read data on inscriptions}
 # inscriptions
