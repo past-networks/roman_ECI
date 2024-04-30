@@ -34,7 +34,8 @@ required_packages <- c("jsonlite",     # read json files
                        "sf",           # load and handle spatial files
                        "raster",       # handle spatial files
                        "units",        # add physical units for geographic comparison
-                       "ggspatial")    # additional plot features for spatial data
+                       "ggspatial",    # additional plot features for spatial data
+                       "triangulr")    # triangular distribution 
 ```
 
 One needs to install them if they have not been installed yet.
@@ -57,6 +58,8 @@ Note that we use the following versions of the packages:
 * raster      : 3.6.26
 * units       : 0.8.2
 * ggspatial   : 1.1.9
+* triangulr   : 1.2.1
+
 These were loaded in the R version 4.3.0.
 
 To check your version of an installed package and R, you may use the following commands.
@@ -89,12 +92,16 @@ Note, however, that these older versions of the packages may not be available fo
 # install_version("raster", version = "3.6.26")
 # install_version("units", version = "0.8.2")
 # install_version("ggspatial", version = "1.1.9")
+# install_version("triangulr", version = "1.2.1")
 # 
 # #load packages
 # invisible(lapply(required_packages, library, character.only = TRUE))
 ```
 
 ## Data TO MODIFY WITH CORRECT PATHS
+CREATE A NEW DIRECTORY
+DOWNLOAD FILES IN IT TO DO
+
 Read the data on inscriptions and standardised spelling
 ```{r read data on inscriptions}
 # inscriptions
@@ -103,9 +110,16 @@ inscriptions <- read_parquet("../../data/economic_complexity/LIST_occupsorgs_ind
 # occupations to merge 
 occupations_all <- read_delim("../../data/economic_complexity/occupations.csv", delim=";")
 occupations_to_merge <- read_delim("../../data/economic_complexity/occupations_to_merge.csv", delim=";")
+
+# inscriptions containing people
+EDH_people <- read_csv("C:/Users/au732923/OneDrive - Aarhus Universitet/Desktop/PSNP/EDH_sna/data/EDH_people_2021.csv")
+
+# epitaphs
+epitaphs <- inscriptions[inscriptions$type_of_inscription_auto %in% c("epitaph"),]
 ```
 
-Read the data on geographical units
+
+Read the data on geographical units. THESE ARE LOCAL PATHS. NEED INSTRUCTION ON HOW TO DOWNLOAD
 ```{r geographical data}
 # cities based on Hanson's dataset
 cities <- st_read("../../data/economic_complexity/roman_cities_pop.geojson")
@@ -120,8 +134,8 @@ provinces <- provinces[!provinces$province=="Roma",]
 ## delete unnecessary columns for our scopes
 provinces <- provinces[,c("province","geometry")]
 
-# country borders (https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp)
-## read the data
+# country borders
+## read the data from local path. Need to download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp 
 world_sf <- read_sf('../../data/economic_complexity/world-administrative-boundaries/world-administrative-boundaries.shp') 
 ## dissolve the administrative boundaries for visualisation purposes
 world_no_borders_sf <- st_union(world_sf) 
@@ -135,11 +149,19 @@ inscriptions_w_occupations <- inscriptions[inscriptions$occups_N>0,]
 
 Add a standard spelling column to the occupations.
 ```{r standardise occupation spelling}
+# ensure no unwanted space are there in the terms
+occupations_all$Term <- trim(occupations_all$Term)
+
+# find full names of occupations by attaching Term2 if present
+occupations_all$Term_full <- ifelse(!is.na(occupations_all$Term2),
+                                    paste(occupations_all$Term,occupations_all$Term2),
+                                    occupations_all$Term)
+                                           
 #initialise column of standard spelling 
 occupations_all$std_spelling <- NA
 
 for (i in seq(nrow(occupations_all))) {
-  occ_term <- occupations_all$Term[i]
+  occ_term <- occupations_all$Term_full[i]
   # for an occupational term, see if it needs to be merged 
   occ_word_match <- str_detect(occ_term,occupations_to_merge$To_be_merged)
   # in case it does, merge it, otherwise, the term itself is the standard spelling
@@ -149,7 +171,8 @@ for (i in seq(nrow(occupations_all))) {
 }
 
 # select only necessary columns
-occupations_dictionary <- unique(occupations_all[,c("Term","std_spelling")])
+occupations_dictionary <- unique(occupations_all[,c("Term_full","std_spelling")]) %>%
+  setNames(c("Term","std_spelling"))
 
 # initialise new column of standard spelling for occupations in inscriptions
 inscriptions_w_occupations$occups_std <- rep(list(NA),nrow(inscriptions_w_occupations))
@@ -171,13 +194,20 @@ Note that naive methods (e.g., using a cell raster) do not work, as each geograp
 
 As a first step, convert the inscriptions into a sf
 ```{r create sf of inscriptions}
+# occupations with inscriptions
 inscriptions_w_occupations_sf <- st_as_sf(inscriptions_w_occupations,
                                           coords = c("Longitude","Latitude"),
                                           crs = crs("epsg:4326"))
+
+# epitaphs
+epitaphs_sf <- st_as_sf(epitaphs,
+                        coords = c("Longitude","Latitude"),
+                        crs = crs("epsg:4326"))
 ```
 
 ## Modern countries
-Associate the inscriptions to the corresponding (closest) country
+### Inscriptions with occupations
+First associate the inscriptions with occupations to the corresponding (closest) country
 ```{r inscriptions in countries}
 inscriptions_coordinates <- data.frame(st_coordinates(inscriptions_w_occupations_sf)) %>% 
   setNames(c("Longitude","Latitude"))
@@ -249,7 +279,48 @@ print(inscriptions_by_country_no_Norway_plot)
 #ggsave("../../figures/economic_complexity/inscriptions_by_country_no_Norway.jpeg", inscriptions_by_country_no_Norway_plot, width = 10, height = 5.5, dpi = 300)
 ```
 
+### Epitaphs
+We do the same for the epitaphs.
+```{r epitaphs in countries}
+epitaphs_coordinates <- data.frame(st_coordinates(epitaphs_sf)) %>% 
+  setNames(c("Longitude","Latitude"))
+
+epitaphs_in_countries <- cbind(epitaphs_sf,
+                                   country = world_sf$iso3[st_nearest_feature(epitaphs_sf,world_sf)],
+                                   epitaphs_coordinates)
+```
+Visual check 
+```{r map epitaphs by country}
+# base map
+epitaphs_by_country_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = epitaphs_in_countries,
+             aes(color = country)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(epitaphs_coordinates$Longitude), 
+                    max(epitaphs_coordinates$Longitude)), 
+           ylim = c(min(epitaphs_coordinates$Latitude), 
+                    max(epitaphs_coordinates$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(epitaphs_by_country_plot)
+#ggsave("../../figures/economic_complexity/epitaphs_by_country.pdf", epitaphs_by_country_plot, width = 7, height = 5.5)
+#ggsave("../../figures/economic_complexity/epitaphs_by_country.jpeg", epitaphs_by_country_plot, width = 7, height = 5.5, dpi = 300)
+```
+
 ## Roman provinces
+### Inscriptions with occupations
 Repeat the same process using as geographical units the Roman provinces at Trajan's time.
 Note that province borders were constantly shifting, so this choice is in principle not more meaningful than using modern country borders.
 
@@ -367,6 +438,118 @@ print(inscriptions_by_province_plot)
 #ggsave("figures/economic_complexity/inscriptions_by_province.pdf", inscriptions_by_province_plot, width = 15, height = 5.5)
 #ggsave("figures/economic_complexity/inscriptions_by_province.jpeg", inscriptions_by_province_plot, width = 15, height = 5.5, dpi = 300)
 ```
+
+### Epitaphs
+The same process is repeated for the epitaphs
+```{r}
+epitaphs_in_provinces <- st_join(epitaphs_sf, provinces)
+# remark: 15 inscriptions fall at the borders between two provinces. For the time being, we assign them at random (may look for the impact of this uncertainty later, but it's likely very small as the counts are large)
+epitaphs_in_provinces <- epitaphs_in_provinces[which(!duplicated(epitaphs_in_provinces$`LIST-ID`)),]
+
+epitaphs_in_provinces$Latitude <- epitaphs$Latitude
+epitaphs_in_provinces$Longitude <- epitaphs$Longitude
+```
+
+Notice that 1657 inscriptions lie outside of the borders of the provinces.
+```{r epitaphs without a province}
+unassigned_epitaphs_index <- which(is.na(epitaphs_in_provinces$province))
+unassigned_epitaphs <- epitaphs[unassigned_epitaphs_index,]
+unassigned_epitaphs_sf <- st_as_sf(unassigned_epitaphs,
+                                   coords = c("Longitude","Latitude"),
+                                   crs = crs("epsg:4326"))
+```
+
+We deal with these exactly as above.
+```{r find closest province to unassigned epitaphs}
+# province index
+closest_province_epitaphs_index <- st_nearest_feature(unassigned_epitaphs_sf,provinces)
+# assign name of the closest province 
+unassigned_epitaphs$closest_province <- provinces$province[closest_province_epitaphs_index]
+# compute distance to the closest province (see if the loop is necessary. I put it because otherwise the memory was suffering)
+unassigned_epitaphs$distance_to_province <- NA
+for (i in 1:nrow(unassigned_epitaphs)) {
+  unassigned_epitaphs$distance_to_province[i] <- st_distance(
+  unassigned_epitaphs_sf[i,],
+  provinces[closest_province_epitaphs_index[i],],
+  by_element = TRUE)
+  if (!i%%50) print(i) 
+}
+unassigned_epitaphs$distance_to_province <- set_units(unassigned_epitaphs$distance_to_province,"meters")
+```
+
+```{r assign epitaphs to closest province if very close}
+epitaphs_in_provinces$province[unassigned_epitaphs_index] <- ifelse(
+  unassigned_epitaphs$distance_to_province < set_units(50000,"meters"),
+  unassigned_epitaphs$closest_province,
+  NA
+)
+```
+
+```{r manually assign epitaphs in Balearic, Achaia, Sicilia, and Britannia}
+# Balearic
+Balearic_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Hispania Citerior","LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Balearic_epitaphs_id$`LIST-ID`] <- "Hispania Citerior"
+
+# Achaia
+Achaia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Achaia","LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Achaia_epitaphs_id$`LIST-ID`] <- "Achaia"
+
+# Sicila
+Sicilia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Sicilia","LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Sicilia_epitaphs_id$`LIST-ID`] <- "Sicilia"
+
+# Britannia
+Britannia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Britannia","LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Britannia_epitaphs_id$`LIST-ID`] <- "Britannia"
+```
+
+THIS CLASSIFICATION  MAY BE DONE MORE CAREFULLY
+
+```{r classify other borders epitaphs}
+# Eastern border
+Eastern_epitaphs <- unassigned_epitaphs[unassigned_epitaphs$Longitude > 40,"LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Eastern_epitaphs$`LIST-ID`] <- "Eastern border"
+
+# update unassigned inscriptions
+remaining_unassigned_epitaphs <- epitaphs[which(is.na(epitaphs_in_provinces$province)),]
+
+# North Eastern border
+North_easter_epitaphs <- remaining_unassigned_epitaphs[remaining_unassigned_epitaphs$Latitude < 50 & remaining_unassigned_epitaphs$Latitude > 42,"LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% North_easter_epitaphs$`LIST-ID`] <- "North-eastern border"
+
+# Desert outliers to delete
+epitaphs_in_provinces <- epitaphs_in_provinces[!is.na(epitaphs_in_provinces$province),]
+```
+
+```{r visual check of epitaphs in provinces}
+# base map
+epitaphs_by_province_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = epitaphs_in_provinces,
+             aes(color = province)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(epitaphs_in_provinces$Longitude), 
+                    max(epitaphs_in_provinces$Longitude)), 
+           ylim = c(min(epitaphs_in_provinces$Latitude), 
+                    max(epitaphs_in_provinces$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(epitaphs_by_province_plot)
+#ggsave("../../figures/economic_complexity/epitaphs_by_province.pdf", epitaphs_by_province_plot, width = 15, height = 5.5)
+#ggsave("../../figures/economic_complexity/epitaphs_by_province.jpeg", epitaphs_by_province_plot, width = 15, height = 5.5, dpi = 300)
+```
+
 
 ## Urban inscriptions
 Associate each inscription to the closest town in the Pleiades data set
@@ -674,3 +857,194 @@ for (t in c(thresholds,"area_based")) {
 ```
 
 # Uncertainty and biases TO DO
+
+The above tables were constructed by using the occupation data as it was directly extracted from the inscriptions. 
+
+However, inscriptions do not represent a realistic view of the real occupational structure. Sources of bias include:
+* Gender bias: inscriptions in general contain information about men than women. 
+* Status bias: inscriptions often contain reference to status, which was more frequently stated by mid-ranking people.
+* Research bias: uneven research interest in different occupations and geographical areas, imperfect detection method, etc. 
+* Occupation bias: some occupations are systematically underreported (e.g., farmers)
+* Language bias: the dataset includes only latin inscriptions, but a large number of inscriptions were written in Greek, especially in the Eastern side of the Roman empire. 
+
+In this section we propose to systematically address these biases with the aim to reach more accurate estimates of the real distribution of occupations.
+
+## Functions to address bias TO DO
+We do this by constructing functions to each source of bias.
+
+### Gender TO DO ¨
+We multiply women-only occupations (which for simplicity we take to be those with female-only names), by a corrective factor, derived from the men/women ratio in funerary inscriptions. 
+
+```{r extract info about gender inscriptions}
+# compute a table of frequency of gender from funerary inscriptions
+EDH_epitaphs <- EDH_people[EDH_people$type_of_inscription_clean=="epitaph",]
+EDH_gender <- table(EDH_epitaphs$gender)
+EDH_gender_NA <- sum(is.na(EDH_epitaphs$gender))
+print(EDH_gender)
+print(paste("NA values:", EDH_gender_NA))
+
+# select female occupations
+occupations_female <- occupations_all$std_spelling[occupations_all$gender=="female"]
+```
+
+Gender is specified as "female", "male", but also uncertain but probably male "M?", uncertain but probably female "W?", and undefined (NA). We account for this in the definition of the ratio.
+```{r compute the men/women ratio in funerary inscriptions}
+gender_ratio_simple <- as.numeric(EDH_gender["male"]/EDH_gender["female"])
+gender_ratio_max <- (EDH_gender[["male"]]+EDH_gender[["M?"]]+EDH_gender[["W?"]]+EDH_gender_NA)/EDH_gender[["female"]]
+gender_ratio_min <- EDH_gender[["male"]]/(EDH_gender[["female"]]+EDH_gender[["M?"]]+EDH_gender[["W?"]]+EDH_gender_NA)
+```
+
+Randomly generate bias correction values based on a triangular distribution with range (gender_ratio_min,gender_ratio_max) and peak at gender_ratio_simple.
+
+```{r vector of gender ratio bias}
+# randomly generate the vector according to a triangular distribution
+gender_ratio_v <- rtri(n = 1000,
+                       min = gender_ratio_min,
+                       max = gender_ratio_max,
+                       mode = gender_ratio_simple)
+
+# visual check of the distribution of the results
+plot(hist(gender_ratio_v,20))
+```
+
+```{r gender bias function}
+gender_bias <- function(table, bias){
+  # update columns with female occupations
+  table[,colnames(table)%in%occupations_female] <- bias*table[,colnames(table)%in%occupations_female] 
+  return(table)
+}
+```
+
+### Status TO DO
+We multiply the professions by factors depending on whether they are high-status (1), low-status (1.2) or mid-status (0.8), reflecting the fact that for low-status the professions are likely underrepresented and are overrepresented for mid-status. 
+
+### Research TO DO
+To establish which geographical areas are overrepresented in inscriptions, we can use the ratio between funerary inscriptions and population, the assumption being that deaths happen (theoretically) proportionally to the population.
+
+```{r manually encode population}
+# Data based on Kyle Harper, 2017, The Fate of Rome: Climate, Disease, and the End of an Empire https://doi-org.ez.statsbiblioteket.dk/10.1515/9781400888917, p. 29-31, Table 2.1
+pop_macroregion_165AD <- data.frame(
+  macroregion = c("Italy", "Iberia", "Gaul and Germany"," Britain","Danubian provinces","Greek peninsula","Anatolia","Levant","Egypt","North Africa"),
+  population = c(14,9,12,2,6,3,10,6,5,8),
+  density = c(45,15,18,13,9,19,15,43,167,19))
+
+# Compute areas of provinces and countries
+world_sf$area <- st_area(world_sf)
+countries_areas_df <- data.frame(country = world_sf[["iso3"]],
+                              area = world_sf[["area"]])
+provinces_areas_df <- data.frame(province = provinces$province,
+                                 area = st_area(provinces))
+
+# assign provinces to their macroregion
+provinces_macroregions_df <- provinces_areas_df
+provinces_macroregions <- list(
+  Italy = c(
+    "Aemilia (Regio VIII)",
+    "Apulia et Calabria (Regio II)",
+    "Bruttium et Lucania (Regio III)",
+    "Corsica",
+    "Etruria (Regio VII)",
+    "Latium et Campania (Regio I)",
+    "Liguria (Regio IX)",
+    "Picenum (Regio V)",
+    "Samnium (Regio IV)",
+    "Sardinia",
+    "Sicilia",
+    "Transpadana (Regio XI)",
+    "Umbria (Regio VI)",
+    "Venetia et Histria (Regio X)"
+  ),
+  Iberia = c(
+    "Baetica",
+    "Hispania Citerior",
+    "Lusitania"
+    ),
+  Gaul_and_Germany = c(
+    "Alpes Cottiae",
+    "Alpes Graiae",
+    "Alpes Maritimae",
+    "Alpes Poeninae",
+    "Aquitania",
+    "Belgica",
+    "Germania Inferior",
+    "Germania Superior",
+    "Lugdunensis",
+    "Narbonensis",
+    "Raetia"
+    ),
+  Britain = c(
+    "Britannia"
+    ),
+  Danubian_provinces = c(
+    "Dacia",
+    "Dalmatia",
+    "Moesia Inferior",
+    "Moesia Superior",
+    "Noricum",
+    "Pannonia Inferior",
+    "Pannonia Superior"
+    ),
+  Greek_peninsula = c(
+    "Achaia",
+    "Creta",
+    "Epirus",
+    "Macedonia",
+    "Thracia"
+    ),
+  Anatolia = c(
+    "Asia",
+    "Bithynia et Pontus",
+    "Cappadocia",
+    "Cilicia",
+    "Lycia et Pamphylia",
+    "Galatia"
+    ),
+  Levant = c(
+    "Arabia",
+    "Cyprus",
+    "Iudaea",
+    "Syria"
+    ),
+  Egypt = c(
+    "Aegyptus"
+    ),
+  North_Africa = c(
+    "Africa Proconsularis",
+    "Cyrene",
+    "Mauretania Caesariensis",
+    "Mauretania Tingitana",
+    "Numidia")
+)
+
+
+# assign relevant countries to their areas, macroregion and population estimate (to break down) 
+countries_macroregions_df <- data.frame(country = rownames(country_table)) %>%
+  left_join(countries_areas_df) 
+# TO DO DO NOT RUN
+countries_macroregions_df$macroregion <- c("Italy", 
+                                        "Gaul and Germany",
+                                        "North Africa",
+                                        "Iberia",
+                                        "North Africa",
+                                        "Gaul and Germany",
+                                        "")
+
+
+
+
+```
+
+
+### Occupation TO DO
+Add farmers (proportionally to total population. Why?)
+
+### Language TO DO
+Assume the same distribution of professions in the (not analysed) Greek inscriptions and use their locations to proportionally increase numbers in the provinces. 
+NEED GREEK DATA
+
+## Specialisation function for updates TO DO NOT PRIORITY
+We create a function to subdivide an occupation into suboccupations as new evidence is gathered
+
+## Apply bias correction (in different orders)
+
+FILES TO USE: country_table, province_table, cities_table_list
