@@ -147,8 +147,22 @@ First, select only the inscriptions containing information on occupations
 inscriptions_w_occupations <- inscriptions[inscriptions$occups_N>0,]
 ```
 
+ATTEMPT: CREATE STANDARD SPELLING DF
+```{r TO CHECK}
+occupations_to_merge_min <- occupations_to_merge[,c("Main_term","To_be_merged")]
+
+occupations_to_merge_separated <- occupations_to_merge_min %>%
+  separate_rows(To_be_merged, sep = ", ") %>%
+  mutate(To_be_merged = trimws(To_be_merged)) # Remove leading/trailing spaces if any
+
+# Rename columns if needed
+colnames(occupations_to_merge_separated) <- c("standard_spelling", "alternative_spellings")
+
+```
+
+
 Add a standard spelling column to the occupations.
-```{r standardise occupation spelling}
+```{r standardise occupation spelling TO CHECK}
 # ensure no unwanted space are there in the terms
 occupations_all$Term <- trim(occupations_all$Term)
 
@@ -163,11 +177,19 @@ occupations_all$std_spelling <- NA
 for (i in seq(nrow(occupations_all))) {
   occ_term <- occupations_all$Term_full[i]
   # for an occupational term, see if it needs to be merged 
-  occ_word_match <- str_detect(occ_term,occupations_to_merge$To_be_merged)
-  # in case it does, merge it, otherwise, the term itself is the standard spelling
-  occupations_all$std_spelling[i] <- ifelse(any(occ_word_match),
-         occupations_to_merge$Main_term[occ_word_match],
-         occ_term)
+  #occ_word_match <- str_detect(occupations_to_merge$To_be_merged,occ_term)
+
+ # in case it does, merge it, otherwise, the term itself is the standard spelling
+  #occupations_all$std_spelling[i] <- ifelse(any(occ_word_match),
+  #       occupations_to_merge$Main_term[occ_word_match],
+  #       occ_term)
+  
+  
+   # MISTAKE HERE: NEED TO match this
+  occupations_all$std_spelling[i] <- ifelse(occ_term %in% occupations_to_merge_separated$alternative_spellings,
+                                            occupations_to_merge_separated$standard_spelling[which(occupations_to_merge_separated$alternative_spellings==occ_term)],
+                                            occ_term
+                                            )
 }
 
 # select only necessary columns
@@ -187,6 +209,15 @@ for (i in seq(nrow(inscriptions_w_occupations))){
   # save the standard spellings for the occupations in the inscription
   inscriptions_w_occupations$occups_std[[i]] <- inscription_occ$std_spelling
 }
+```
+
+Extract info on unique occupations in inscriptions to fil the table
+```{r unique occupations for online table TO DO}
+unique_occupations_in_inscriptions_df <- data.frame(std_spelling = sort(unique(unlist(inscriptions_w_occupations$occups_std)))) %>% 
+  left_join(occupations_all,by=join_by(std_spelling),)
+
+#write.csv(unique_occupations_in_inscriptions_df,"../../results/economic_complexity/unique_occupations_in_inscriptions.csv")
+
 ```
 
 # Geographical units
@@ -435,8 +466,8 @@ inscriptions_by_province_plot <- ggplot() +
   ) 
 
 print(inscriptions_by_province_plot)
-#ggsave("figures/economic_complexity/inscriptions_by_province.pdf", inscriptions_by_province_plot, width = 15, height = 5.5)
-#ggsave("figures/economic_complexity/inscriptions_by_province.jpeg", inscriptions_by_province_plot, width = 15, height = 5.5, dpi = 300)
+#ggsave("../../figures/economic_complexity/inscriptions_by_province.pdf", inscriptions_by_province_plot, width = 15, height = 5.5)
+#ggsave("../../figures/economic_complexity/inscriptions_by_province.jpeg", inscriptions_by_province_plot, width = 15, height = 5.5, dpi = 300)
 ```
 
 ### Epitaphs
@@ -703,9 +734,9 @@ country_table_heatmap_plot <- ggplot(country_table_heatmap, aes(occupation, coun
 
 Finally, save the results.
 ```{r save results}
-#write.csv(country_table,"../../results/economic_complexity/country_table.csv")
-#ggsave("../../figures/economic_complexity/country_table_heatmap.pdf", country_table_heatmap_plot, width = 15, height = 10)
-#ggsave("../../figures/economic_complexity/country_table_heatmap.jpeg", country_table_heatmap_plot, width = 15, height = 10, dpi = 300)
+write.csv(country_table,"../../results/economic_complexity/country_table.csv")
+ggsave("../../figures/economic_complexity/country_table_heatmap.pdf", country_table_heatmap_plot, width = 15, height = 10)
+ggsave("../../figures/economic_complexity/country_table_heatmap.jpeg", country_table_heatmap_plot, width = 15, height = 10, dpi = 300)
 ```
 
 
@@ -766,9 +797,9 @@ print(province_table_heatmap_plot)
 
 Finally, save the results
 ```{r save results}
-#write.csv(province_table,"../../results/economic_complexity/province_table.csv")
-#ggsave("../../figures/economic_complexity/province_table_heatmap.pdf", province_table_heatmap_plot, width = 15, height = 10)
-#ggsave("../../figures/economic_complexity/province_table_heatmap.jpeg", province_table_heatmap_plot, width = 15, height = 10, dpi = 300)
+write.csv(province_table,"../../results/economic_complexity/province_table.csv")
+ggsave("../../figures/economic_complexity/province_table_heatmap.pdf", province_table_heatmap_plot, width = 15, height = 10)
+ggsave("../../figures/economic_complexity/province_table_heatmap.jpeg", province_table_heatmap_plot, width = 15, height = 10, dpi = 300)
 ```
 
 ## Cities
@@ -836,9 +867,9 @@ cities_table_heapmap_by_threshold <- function(t){
           axis.text.y = element_text(size = 2))
   
   # save results
-  #write.csv(cities_table,paste0("../../results/economic_complexity/cities_table_threshold_",t,".csv"))
-  #ggsave(paste0("../../figures/economic_complexity/heatmap_cities_",t,".pdf"), heatmap_plot, width = 15, height = 10)
-  #ggsave(paste0("../../figures/economic_complexity/heatmap_cities_",t,".jpeg"), heatmap_plot, width = 15, height = 10, dpi = 300)
+  write.csv(cities_table,paste0("../../results/economic_complexity/cities_table_threshold_",t,".csv"))
+  ggsave(paste0("../../figures/economic_complexity/heatmap_cities_",t,".pdf"), heatmap_plot, width = 15, height = 10)
+  ggsave(paste0("../../figures/economic_complexity/heatmap_cities_",t,".jpeg"), heatmap_plot, width = 15, height = 10, dpi = 300)
   
   # visualise them
   print(heatmap_plot)
@@ -862,7 +893,6 @@ The above tables were constructed by using the occupation data as it was directl
 
 However, inscriptions do not represent a realistic view of the real occupational structure. Sources of bias include:
 * Gender bias: inscriptions in general contain information about men than women. 
-* Status bias: inscriptions often contain reference to status, which was more frequently stated by mid-ranking people.
 * Research bias: uneven research interest in different occupations and geographical areas, imperfect detection method, etc. 
 * Occupation bias: some occupations are systematically underreported (e.g., farmers)
 * Language bias: the dataset includes only latin inscriptions, but a large number of inscriptions were written in Greek, especially in the Eastern side of the Roman empire. 
@@ -915,30 +945,29 @@ gender_bias <- function(table, bias){
 }
 ```
 
-### Status TO DO
-We multiply the professions by factors depending on whether they are high-status (1), low-status (1.2) or mid-status (0.8), reflecting the fact that for low-status the professions are likely underrepresented and are overrepresented for mid-status. 
 
 ### Research TO DO
 To establish which geographical areas are overrepresented in inscriptions, we can use the ratio between funerary inscriptions and population, the assumption being that deaths happen (theoretically) proportionally to the population.
 
-```{r manually encode population}
-# Data based on Kyle Harper, 2017, The Fate of Rome: Climate, Disease, and the End of an Empire https://doi-org.ez.statsbiblioteket.dk/10.1515/9781400888917, p. 29-31, Table 2.1
-pop_macroregion_165AD <- data.frame(
-  macroregion = c("Italy", "Iberia", "Gaul and Germany"," Britain","Danubian provinces","Greek peninsula","Anatolia","Levant","Egypt","North Africa"),
-  population = c(14,9,12,2,6,3,10,6,5,8),
-  density = c(45,15,18,13,9,19,15,43,167,19))
+To do this, we need to estimate the total population residing in each geographical unit.  
 
-# Compute areas of provinces and countries
-world_sf$area <- st_area(world_sf)
-countries_areas_df <- data.frame(country = world_sf[["iso3"]],
-                              area = world_sf[["area"]])
-provinces_areas_df <- data.frame(province = provinces$province,
-                                 area = st_area(provinces))
+#### Population by geographical unit
+As far as we know, there are no estimates of the Ancient Roman population at the provincial level (and certainly not within the borders of modern nations or town hinterlands).
 
-# assign provinces to their macroregion
-provinces_macroregions_df <- provinces_areas_df
-provinces_macroregions <- list(
-  Italy = c(
+Instead, a set of estimates exist for the total population in 10 macroregions of the Empire (Table 3.1 in "Scheidel W. Demography. In: Scheidel W, Morris I, Saller RP, eds. The Cambridge Economic History of the Greco-Roman World. Cambridge University Press; 2007:38-86") and for the population of individual urban units (Hanson).
+
+For each macroregion, we compute the urban population by summing the population estimates of all the urban areas falling within it.
+We subtract the urban population to obtain an estimate of the rural population in the macroregion. 
+
+To each province in the macroregion, we find the urban population by summing the population estimates of the urban areas falling within it. We find the rural population by taking a part of the rural population of the macroregion, proportionate to the area of the province.
+
+Note that this is the same as assuming that the rural population density is approximately constant within a macroregion. This is a crude assumption, but the most natural one that can be made with limited data and without additional population models. In the future, it can be improved by integrating additional information (e.g., terrain and suitability to agriculture).
+
+##### Provinces
+First, associate each province to the macroregion mentioned by Scheidel.
+```{r assign each province to its macroregion}
+provinces_macroregions_list <- list(
+  Italy_and_islands = c(
     "Aemilia (Regio VIII)",
     "Apulia et Calabria (Regio II)",
     "Bruttium et Lucania (Regio III)",
@@ -975,7 +1004,7 @@ provinces_macroregions <- list(
   Britain = c(
     "Britannia"
     ),
-  Danubian_provinces = c(
+  Danubian_region = c(
     "Dacia",
     "Dalmatia",
     "Moesia Inferior",
@@ -999,7 +1028,7 @@ provinces_macroregions <- list(
     "Lycia et Pamphylia",
     "Galatia"
     ),
-  Levant = c(
+  Greater_Syria = c(
     "Arabia",
     "Cyprus",
     "Iudaea",
@@ -1016,8 +1045,228 @@ provinces_macroregions <- list(
     "Numidia")
 )
 
+# transform to dataframe
+provinces_macroregions_df<-data.frame(unlist(provinces_macroregions_list)) %>% setNames("province")
+provinces_macroregions_df$macroregion <- provinces_macroregions_df %>% rownames() %>% str_remove_all("[0-9]") %>% str_replace_all("_"," ")
+rownames(provinces_macroregions_df) <- NULL
+```
 
-# assign relevant countries to their areas, macroregion and population estimate (to break down) 
+Compute the area of each province, and the area of each macroregion
+```{r}
+# areas of the provinces
+provinces_areas_df <- data.frame(province = provinces$province,
+                                 area = st_area(provinces))
+provinces_macroregions_df <- left_join(provinces_macroregions_df,
+                                       provinces_areas_df)
+
+# areas of the macroregions
+macroregions_areas_df <- provinces_macroregions_df %>%
+  group_by(macroregion) %>%
+  summarize(macroregion_area = sum(area))
+```
+
+Find the proportion of the area of each macroregion falling in a specific province
+```{r province area/macroregion area}
+# add to the province and macroregions df the areas of the macroregions
+provinces_macroregions_full_info_df <- left_join(
+  provinces_macroregions_df,
+  macroregions_areas_df,
+  by = join_by(macroregion))
+
+# find the proportion of the macroregion's area falling in each province
+provinces_macroregions_full_info_df$area_proportion <- as.numeric(
+  provinces_macroregions_full_info_df$area/provinces_macroregions_full_info_df$macroregion_area)
+```
+
+
+Compute the urban population for each province and macroregion
+```{r urban population by province and region}
+# assign each city to its closest province 
+# RK: the province may differ from those used by Hanson, and we need this step to ensure consistency.
+closest_province_to_city_index <- st_nearest_feature(cities,provinces)
+cities_in_provinces_df <- data.frame(
+  Primary.Key = cities$Primary.Key,
+  Ancient.Toponym = cities$Ancient.Toponym,
+  pop_est = cities$pop_est,
+  province = provinces$province[closest_province_to_city_index]
+  )
+
+# compute the urban population by province
+province_urban_population_df <- cities_in_provinces_df %>%
+  group_by(province) %>%
+  summarize(urban_pop = sum(pop_est)) 
+
+```
+
+If there are provinces without cities, assign population 0.
+This is actualy the case of the Alpes Graiae. 
+```{r provinces without cities}
+# add a row with value 0 
+province_urban_population_df <- rbind(
+  province_urban_population_df,
+  data.frame(
+    province = provinces$province[
+      which(!provinces$province %in%
+              province_urban_population_df$province)],
+    urban_pop = 0
+    )
+)
+
+# sort alphabetically
+province_urban_population_df <- province_urban_population_df[order(province_urban_population_df$province),]
+```
+
+
+```{r urban population by macroregion}
+# urban population of the macroregions
+macroregions_urban_population_df <- province_urban_population_df %>%
+  left_join(provinces_macroregions_df) %>%
+  group_by(macroregion) %>%
+  summarize(urban_pop = sum(urban_pop))
+
+#RK: HANSON'S CITY POPULATION DATA SHOULD CONTAIN MORE INFO ON THE INHERENT UNCERTAINTY
+```
+
+Then digitise the total population estimates for each macroregion.
+```{r manually encode population estimates for the macroregions}
+# Data based on "Scheidel W. Demography. In: Scheidel W, Morris I, Saller RP, eds. The Cambridge Economic History of the Greco-Roman World. Cambridge University Press; 2007:38-86." Table 3.1
+macroregion_pop_165AD_df <- data.frame(
+  macroregion = c("Italy and islands", 
+                  "Iberia", 
+                  "Gaul and Germany",
+                  "Britain",
+                  "Danubian region",
+                  "Greek peninsula",
+                  "Anatolia",
+                  "Greater Syria",
+                  "Egypt",
+                  "North Africa"),
+  tot_pop_min = c(12000000,
+                  7000000,
+                  9000000,
+                  1500000,
+                  5000000,
+                  2500000,
+                  9000000,
+                  5000000,
+                  5000000,
+                  7000000),
+  tot_pop_max = c(13000000,
+                  9000000,
+                  12000000,
+                  2000000,
+                  6000000,
+                  3000000,
+                  10000000,
+                  6000000,
+                  6000000,
+                  8000000))
+```
+
+It is easy to have estimates of the rural population of each macroregion by subtracting the urban population from the estimates of the urban population.
+
+```{r total, rural urban and rural population of the macroregions}
+# total and urban population 
+macroregion_pop_165AD_rural_urban_df <- left_join(
+  macroregion_pop_165AD_df,
+  macroregions_urban_population_df)
+
+# rural population
+macroregion_pop_165AD_rural_urban_df$rural_pop_min <- macroregion_pop_165AD_rural_urban_df$tot_pop_min - macroregion_pop_165AD_rural_urban_df$urban_pop
+macroregion_pop_165AD_rural_urban_df$rural_pop_max <- 
+macroregion_pop_165AD_rural_urban_df$tot_pop_max - macroregion_pop_165AD_rural_urban_df$urban_pop
+```
+
+To estimate the rural population in each province, we distribute the rural population living in each macroregion amongst the provinces that form it, proportionately to their area.
+
+```{r urban, rural and total population by province}
+# add the province's urban population to the full info df
+provinces_macroregions_full_info_df <- left_join(
+  provinces_macroregions_full_info_df,
+  province_urban_population_df
+)
+
+# add the populations of the macroregion
+provinces_macroregions_full_info_df <- left_join(
+  provinces_macroregions_full_info_df,
+  # add prefix macroregion to the column names to avoid confusion
+  macroregion_pop_165AD_rural_urban_df %>% 
+    setNames(c("macroregion",
+               paste0(
+                 "macroregion_",
+                 colnames(macroregion_pop_165AD_rural_urban_df)[-1])))
+)
+
+# add the rural population proportionately to the area of the province
+provinces_macroregions_full_info_df$rural_pop_max <- 
+  provinces_macroregions_full_info_df$macroregion_rural_pop_max*provinces_macroregions_full_info_df$area_proportion
+provinces_macroregions_full_info_df$rural_pop_min <- 
+  provinces_macroregions_full_info_df$macroregion_rural_pop_min*provinces_macroregions_full_info_df$area_proportion
+
+# compute the min/max total population for each province
+provinces_macroregions_full_info_df$tot_pop_min <- provinces_macroregions_full_info_df$urban_pop+
+  provinces_macroregions_full_info_df$rural_pop_min
+provinces_macroregions_full_info_df$tot_pop_max <- provinces_macroregions_full_info_df$urban_pop+
+  provinces_macroregions_full_info_df$rural_pop_max
+```
+
+Check that total values of the estimates make sense
+```{r}
+# compare these two data frames with the population in macroregion_pop_165AD_df
+provinces_macroregions_full_info_df %>% group_by(macroregion) %>%
+  summarize(pop = sum(tot_pop_min))
+provinces_macroregions_full_info_df %>% group_by(macroregion) %>%
+  summarize(pop = sum(tot_pop_max))
+```
+
+Extract only population info per each province
+```{r select population columns from full info df}
+provinces_population_df <-
+  provinces_macroregions_full_info_df[,c("province",
+    "urban_pop",
+    "rural_pop_min",
+    "rural_pop_max",
+    "tot_pop_min",
+    "tot_pop_max")]
+```
+
+Finally save these results.
+```{r save population by province}
+write.csv(provinces_macroregions_full_info_df,
+          "../../results/economic_complexity/provinces_macroregions_full_info.csv")
+write.csv(provinces_population_df,
+          "../../results/economic_complexity/provinces_population.csv")
+
+```
+
+ZIPPO
+
+
+```{r manually encode population TO REORGANISE}
+# Compute areas of countries
+world_sf$area <- st_area(world_sf)
+countries_areas_df <- data.frame(country = world_sf[["iso3"]],
+                              area = world_sf[["area"]])
+
+
+
+# add info on population and density of macroregions
+macroregions_areas_and_pop_df <- left_join(macroregions_areas_df,
+                                           pop_macroregion_165AD,
+                                           join_by(macroregion))
+macroregions_areas_and_pop_df$density_computed <- macroregions_areas_and_pop_df$population*1000000/(macroregions_areas_and_pop_df$macroregion_area/1000000)
+
+# estimate population of each province by distributing uniformly the population of each macroregion within its constituent provinces
+provinces_population_df <- left_join(provinces_macroregions_df,
+                                    macroregions_areas_and_pop_df[,c("macroregion","macroregion_area","population")] %>%                                      setNames(c("macroregion","macroregion_area","macroregion_population")),
+                                       join_by(macroregion)) 
+provinces_population_df$area_proportion <- provinces_population_df$area/provinces_population_df$macroregion_area
+provinces_population_df$population <- provinces_population_df$macroregion_population*provinces_population_df$area_proportion
+
+
+
+
+# assign relevant countries to their areas, macroregion and population estimates (to break down) 
 countries_macroregions_df <- data.frame(country = rownames(country_table)) %>%
   left_join(countries_areas_df) 
 # TO DO DO NOT RUN
