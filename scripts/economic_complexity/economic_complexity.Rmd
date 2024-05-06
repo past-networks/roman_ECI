@@ -1052,15 +1052,16 @@ rownames(provinces_macroregions_df) <- NULL
 ```
 
 Compute the area of each province, and the area of each macroregion
-```{r}
+```{r areas of provinces and macroregions}
 # areas of the provinces
 provinces_areas_df <- data.frame(province = provinces$province,
                                  area = st_area(provinces))
-provinces_macroregions_df <- left_join(provinces_macroregions_df,
+
+provinces_macroregions_areas_df <- left_join(provinces_macroregions_df,
                                        provinces_areas_df)
 
 # areas of the macroregions
-macroregions_areas_df <- provinces_macroregions_df %>%
+macroregions_areas_df <- provinces_macroregions_areas_df %>%
   group_by(macroregion) %>%
   summarize(macroregion_area = sum(area))
 ```
@@ -1069,7 +1070,7 @@ Find the proportion of the area of each macroregion falling in a specific provin
 ```{r province area/macroregion area}
 # add to the province and macroregions df the areas of the macroregions
 provinces_macroregions_full_info_df <- left_join(
-  provinces_macroregions_df,
+  provinces_macroregions_areas_df,
   macroregions_areas_df,
   by = join_by(macroregion))
 
@@ -1078,9 +1079,23 @@ provinces_macroregions_full_info_df$area_proportion <- as.numeric(
   provinces_macroregions_full_info_df$area/provinces_macroregions_full_info_df$macroregion_area)
 ```
 
+Create an sf object of the macroregions DOES NOT WORK
+```{r macroregions sf SKIP}
+# associate macroregions to provinces in the sf
+#provinces_macroregions <- left_join(provinces,
+#                                    provinces_macroregions_df)
 
-Compute the urban population for each province and macroregion
-```{r urban population by province and region}
+# unite macroregions
+#macroregions <- provinces_macroregions %>%
+#  group_by(macroregion) %>%
+#  summarize() %>%
+#  st_union()
+
+#st_write(macroregions,"C:/Users/au732923/OneDrive - Aarhus Universitet/Desktop/macroregions.shp")
+```
+
+Compute the urban population for each province.
+```{r urban population by province}
 # assign each city to its closest province 
 # RK: the province may differ from those used by Hanson, and we need this step to ensure consistency.
 closest_province_to_city_index <- st_nearest_feature(cities,provinces)
@@ -1095,7 +1110,6 @@ cities_in_provinces_df <- data.frame(
 province_urban_population_df <- cities_in_provinces_df %>%
   group_by(province) %>%
   summarize(urban_pop = sum(pop_est)) 
-
 ```
 
 If there are provinces without cities, assign population 0.
@@ -1116,11 +1130,11 @@ province_urban_population_df <- rbind(
 province_urban_population_df <- province_urban_population_df[order(province_urban_population_df$province),]
 ```
 
-
+Finally coompute the urban population by macroregion.
 ```{r urban population by macroregion}
 # urban population of the macroregions
 macroregions_urban_population_df <- province_urban_population_df %>%
-  left_join(provinces_macroregions_df) %>%
+  left_join(provinces_macroregions_areas_df) %>%
   group_by(macroregion) %>%
   summarize(urban_pop = sum(urban_pop))
 
@@ -1178,7 +1192,6 @@ macroregion_pop_165AD_rural_urban_df$tot_pop_max - macroregion_pop_165AD_rural_u
 ```
 
 To estimate the rural population in each province, we distribute the rural population living in each macroregion amongst the provinces that form it, proportionately to their area.
-
 ```{r urban, rural and total population by province}
 # add the province's urban population to the full info df
 provinces_macroregions_full_info_df <- left_join(
@@ -1211,7 +1224,7 @@ provinces_macroregions_full_info_df$tot_pop_max <- provinces_macroregions_full_i
 ```
 
 Check that total values of the estimates make sense
-```{r}
+```{r check total population in macroregion}
 # compare these two data frames with the population in macroregion_pop_165AD_df
 provinces_macroregions_full_info_df %>% group_by(macroregion) %>%
   summarize(pop = sum(tot_pop_min))
@@ -1231,7 +1244,7 @@ provinces_population_df <-
 ```
 
 Finally save these results.
-```{r save population by province}
+```{r save population by province as csv}
 write.csv(provinces_macroregions_full_info_df,
           "../../results/economic_complexity/provinces_macroregions_full_info.csv")
 write.csv(provinces_population_df,
@@ -1239,50 +1252,48 @@ write.csv(provinces_population_df,
 
 ```
 
-ZIPPO
+##### Countries
+We perform a similar operation to estimate the urban and rural population who lived within the borders of modern day countries. 
+We estimate the urban population using Hanson's dataset. 
+We estimate the rural population by distributing the above estimates of rural populations proportionately to the percentage of area of a province falling in each country.
+E.g. The province "Sicilia" falls 100% within the modern country of Italy, hence we assign all of Sicilia's rural population to Italy.
+Instead if another province falls 50% in in a country and 50% in another country, we assign half of the province's rural population to the each country. (NEED TO FIND A CONCRETE EXAMPLE)
 
-
-```{r manually encode population TO REORGANISE}
-# Compute areas of countries
-world_sf$area <- st_area(world_sf)
-countries_areas_df <- data.frame(country = world_sf[["iso3"]],
-                              area = world_sf[["area"]])
-
-
-
-# add info on population and density of macroregions
-macroregions_areas_and_pop_df <- left_join(macroregions_areas_df,
-                                           pop_macroregion_165AD,
-                                           join_by(macroregion))
-macroregions_areas_and_pop_df$density_computed <- macroregions_areas_and_pop_df$population*1000000/(macroregions_areas_and_pop_df$macroregion_area/1000000)
-
-# estimate population of each province by distributing uniformly the population of each macroregion within its constituent provinces
-provinces_population_df <- left_join(provinces_macroregions_df,
-                                    macroregions_areas_and_pop_df[,c("macroregion","macroregion_area","population")] %>%                                      setNames(c("macroregion","macroregion_area","macroregion_population")),
-                                       join_by(macroregion)) 
-provinces_population_df$area_proportion <- provinces_population_df$area/provinces_population_df$macroregion_area
-provinces_population_df$population <- provinces_population_df$macroregion_population*provinces_population_df$area_proportion
-
-
-
-
-# assign relevant countries to their areas, macroregion and population estimates (to break down) 
-countries_macroregions_df <- data.frame(country = rownames(country_table)) %>%
-  left_join(countries_areas_df) 
-# TO DO DO NOT RUN
-countries_macroregions_df$macroregion <- c("Italy", 
-                                        "Gaul and Germany",
-                                        "North Africa",
-                                        "Iberia",
-                                        "North Africa",
-                                        "Gaul and Germany",
-                                        "")
-
-
-
-
+```{r country and provinces sf}
+# find intersections between the two shapefiles of modern day countries and provinces
+countries_provinces <- st_intersection(world_sf,provinces) %>%
+  dplyr::select(c("iso3","area","province","geometry")) %>% # select only needed columns
+  setNames(c("country","country_area","province","geometry"))
 ```
 
+Compute the area of the intersections
+```{r country and provinces areas}
+# calculate the area of each intersection
+countries_provinces$intersection_area <- st_area(countries_provinces)
+
+# associate area of each province
+countries_provinces <- left_join(countries_provinces,
+                                 provinces_areas_df)
+```
+
+note that due to small differences between the shapefiles of the countries and the provinces, the sum of the areas of the intersections falling within a given province is not exactly equal to that of the province itself.
+```{r corrective factors for areas}
+check_areas_countries_provinces_intersection <- countries_provinces %>% 
+  group_by(province) %>%
+  summarize(sum_intersection_area = sum (intersection_area)) %>% 
+  left_join(provinces_areas_df)
+check_areas_countries_provinces_intersection$area_correction_factor <- check_areas_countries_provinces_intersection$sum_intersection_area/check_areas_countries_provinces_intersection$area
+```
+
+From now on, we use this total intersection area as our province area to avoid complications.
+
+Compute how much of each province's total area fell in each intersection.
+
+
+
+To estimate the rural and urban population for each country, we consider the intersection between the countries and the ancient provinces. Then we 
+
+ZIPPO
 
 ### Occupation TO DO
 Add farmers (proportionally to total population. Why?)
