@@ -1130,7 +1130,7 @@ province_urban_population_df <- rbind(
 province_urban_population_df <- province_urban_population_df[order(province_urban_population_df$province),]
 ```
 
-Finally coompute the urban population by macroregion.
+Finally compute the urban population by macroregion.
 ```{r urban population by macroregion}
 # urban population of the macroregions
 macroregions_urban_population_df <- province_urban_population_df %>%
@@ -1245,10 +1245,10 @@ provinces_population_df <-
 
 Finally save these results.
 ```{r save population by province as csv}
-write.csv(provinces_macroregions_full_info_df,
-          "../../results/economic_complexity/provinces_macroregions_full_info.csv")
-write.csv(provinces_population_df,
-          "../../results/economic_complexity/provinces_population.csv")
+#write.csv(provinces_macroregions_full_info_df,
+#          "../../results/economic_complexity/provinces_macroregions_full_info.csv")
+#write.csv(provinces_population_df,
+#          "../../results/economic_complexity/provinces_population.csv")
 
 ```
 
@@ -1260,38 +1260,157 @@ E.g. The province "Sicilia" falls 100% within the modern country of Italy, hence
 Instead if another province falls 50% in in a country and 50% in another country, we assign half of the province's rural population to the each country. (NEED TO FIND A CONCRETE EXAMPLE)
 
 ```{r country and provinces sf}
+# add area info to countries
+world_sf$area <- st_area(world_sf)
+
 # find intersections between the two shapefiles of modern day countries and provinces
-countries_provinces <- st_intersection(world_sf,provinces) %>%
+intersections <- st_intersection(world_sf,provinces) %>%
   dplyr::select(c("iso3","area","province","geometry")) %>% # select only needed columns
   setNames(c("country","country_area","province","geometry"))
 ```
-
 Compute the area of the intersections
 ```{r country and provinces areas}
 # calculate the area of each intersection
-countries_provinces$intersection_area <- st_area(countries_provinces)
+intersections$intersection_area <- st_area(intersections)
 
-# associate area of each province
-countries_provinces <- left_join(countries_provinces,
-                                 provinces_areas_df)
+# save info in a dataframe for easier retrival
+intersections_df <- st_drop_geometry(intersections)
+
+# add ID columns
+intersections_df$intersection_ID <- paste(
+  1:nrow(intersections_df),
+  intersections_df$country,
+  intersections_df$province ) %>% 
+  str_replace_all(" ","_")
+
+# place ID column as first one
+intersections_df <- intersections_df[,c("intersection_ID","country","province","country_area","intersection_area")]
 ```
 
-note that due to small differences between the shapefiles of the countries and the provinces, the sum of the areas of the intersections falling within a given province is not exactly equal to that of the province itself.
+Note that due to small differences between the shapefiles of the countries and the provinces, the sum of the areas of the intersections falling within a given province is not exactly equal to that of the province itself.
 ```{r corrective factors for areas}
-check_areas_countries_provinces_intersection <- countries_provinces %>% 
+# compute the sum of the areas of the intersections
+check_areas_intersections_df <- intersections_df %>%
   group_by(province) %>%
-  summarize(sum_intersection_area = sum (intersection_area)) %>% 
+  summarize(sum_intersection_areas = sum (intersection_area)) %>% 
   left_join(provinces_areas_df)
-check_areas_countries_provinces_intersection$area_correction_factor <- check_areas_countries_provinces_intersection$sum_intersection_area/check_areas_countries_provinces_intersection$area
+
+# compare the sum of the areas of the intersections with the area of the province 
+check_areas_intersections_df$area_correction_factor <- check_areas_intersections_df$sum_intersection_areas/check_areas_intersections_df$area
 ```
 
 From now on, we use this total intersection area as our province area to avoid complications.
+Compute the proportion of each province's total area (or, more precisely, of the sum of the intersections) fell in each intersection. 
+```{r proportion of area by intersection}
+# add sum of the areas of the intersections to the df of intersections
+intersections_df <- left_join(
+  intersections_df,
+  check_areas_intersections_df[c("province","sum_intersection_areas")]
+  )
 
-Compute how much of each province's total area fell in each intersection.
+# compute the proportion by dividing the areas
+intersections_df$prop_intersection_area <- intersections_df$intersection_area/intersections_df$sum_intersection_areas
+```
+
+Now to estimate the rural population of each intersection, take the rural population of the province it belongs to and multiply by the proportion of the total area of the province (or more precisely of the sum of the intersections belonging to the province) that falls within the intersection.
+
+```{r rural population of intersections}
+# merge info on intersections and rural population of the provinces
+intersections_pop_full_info_df <- left_join(
+  intersections_df[c("intersection_ID","country","province","prop_intersection_area")],
+  provinces_population_df[c("province","rural_pop_min","rural_pop_max")]) %>% setNames(c("intersection_ID","country","province","prop_intersection_area","province_rural_pop_min","province_rural_pop_max"))
 
 
+# compute estimates of rural population of intersections
+intersections_pop_full_info_df$intersection_rural_pop_min <- as.numeric(intersections_pop_full_info_df$province_rural_pop_min*intersections_pop_full_info_df$prop_intersection_area)
+intersections_pop_full_info_df$intersection_rural_pop_max <- as.numeric(intersections_pop_full_info_df$province_rural_pop_max*intersections_pop_full_info_df$prop_intersection_area)
+```
 
-To estimate the rural and urban population for each country, we consider the intersection between the countries and the ancient provinces. Then we 
+Now compute the urban population of each intersection starting from Hanson's dataset.
+```{r urban population by intersection}
+# assign each city to its closest intersection
+closest_intersection_to_city_index <- st_nearest_feature(cities,intersections)
+cities_in_intersections_df <- data.frame(
+  Primary.Key = cities$Primary.Key,
+  Ancient.Toponym = cities$Ancient.Toponym,
+  pop_est = cities$pop_est,
+  intersection_ID = intersections_df$intersection_ID[closest_intersection_to_city_index]
+)
+
+# compute the urban population by intersection
+intersections_urban_population_df <- cities_in_intersections_df %>%
+  group_by(intersection_ID) %>%
+  summarize(intersection_urban_pop = sum(pop_est)) 
+```
+
+If there are intersections without cities, assign population 0.
+```{r intersections without cities}
+# add a row with value 0 
+intersections_urban_population_df <- rbind(
+  intersections_urban_population_df,
+  data.frame(
+    intersection_ID = intersections_df$intersection_ID[
+      which(!intersections_df$intersection_ID %in%
+              intersections_urban_population_df$intersection_ID)],
+    intersection_urban_pop = 0
+    )
+)
+
+# sort alphabetically
+intersections_urban_population_df <- intersections_urban_population_df[order(intersections_urban_population_df$intersection_ID),]
+```
+
+Add this info to the df of intersections' populations
+```{r urban, rural and total population of intersections}
+# urban population
+intersections_pop_full_info_df <- left_join(intersections_pop_full_info_df,
+                                            intersections_urban_population_df)
+
+# total population
+intersections_pop_full_info_df$intersection_tot_pop_min <- 
+intersections_pop_full_info_df$intersection_rural_pop_min + 
+intersections_pop_full_info_df$intersection_urban_pop
+intersections_pop_full_info_df$intersection_tot_pop_max <-
+  intersections_pop_full_info_df$intersection_rural_pop_max + 
+intersections_pop_full_info_df$intersection_urban_pop
+```
+Check the dataset for consistency: RK THIS ALMOST WORKS BUT NOT QUITE
+
+```{r check that the total for the provinces almost matches}
+intersections_pop_full_info_df %>% 
+  group_by(province) %>%
+  summarize(preliminary_sum_min=sum(intersection_tot_pop_max))  %>%
+  left_join(
+    provinces_macroregions_full_info_df[c("province","tot_pop_max","tot_pop_min")]
+  )
+```
+
+Remark: the match is not perfect: there must be a city that is classifies as closer to Achaia than Asia once the intersections are taken. This should not be a huge problem in principle as the difference is small. But it is worth to take it under consideration.
+
+Finally, group the intersections by country and save the population data
+
+```{r group the intersections by country and save the population data}
+# compute the population
+countries_pop_full_info_df <-  intersections_pop_full_info_df %>% 
+  group_by(country) %>% 
+  summarize(urban_pop= sum(intersection_urban_pop),
+            rural_pop_min = sum(intersection_rural_pop_min),
+            rural_pop_max = sum(intersection_rural_pop_min),
+            tot_pop_min = sum(intersection_tot_pop_min),
+            tot_pop_max = sum(intersection_tot_pop_max))
+
+# check validity of grand total
+(sum(provinces_macroregions_full_info_df$tot_pop_min) == sum(countries_pop_full_info_df$tot_pop_min) && sum(provinces_macroregions_full_info_df$tot_pop_max) == sum(countries_pop_full_info_df$tot_pop_max)) 
+
+# save results
+write.csv(countries_pop_full_info_df,
+          "../../results/economic_complexity/countries_population.csv")
+write.csv(intersections_pop_full_info_df,
+          "../../results/economic_complexity/intersections_population_full_info.csv")
+
+```
+
+Finally
 
 ZIPPO
 
