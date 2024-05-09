@@ -221,6 +221,7 @@ unique_occupations_in_inscriptions_df <- data.frame(std_spelling = sort(unique(u
 ```
 
 # Geographical units
+## Intro
 Note that naive methods (e.g., using a cell raster) do not work, as each geographical unit must have at least one inscription and the data is very sparse.
 
 As a first step, convert the inscriptions into a sf
@@ -678,7 +679,6 @@ print(
 ```
 
 # Table of occupations
-Now, build the table of occupations per geographic unit depending on the choice of the latter.
 ## Country
 Prepare the data in the correct format by unlisting the occupations in each inscription
 ```{r unnest the df}
@@ -738,7 +738,6 @@ write.csv(country_table,"../../results/economic_complexity/country_table.csv")
 ggsave("../../figures/economic_complexity/country_table_heatmap.pdf", country_table_heatmap_plot, width = 15, height = 10)
 ggsave("../../figures/economic_complexity/country_table_heatmap.jpeg", country_table_heatmap_plot, width = 15, height = 10, dpi = 300)
 ```
-
 
 ## Province
 Repeat the same process as above for provinces. 
@@ -888,7 +887,7 @@ for (t in c(thresholds,"area_based")) {
 ```
 
 # Uncertainty and biases TO DO
-
+## Uncertainty intro
 The above tables were constructed by using the occupation data as it was directly extracted from the inscriptions. 
 
 However, inscriptions do not represent a realistic view of the real occupational structure. Sources of bias include:
@@ -899,10 +898,10 @@ However, inscriptions do not represent a realistic view of the real occupational
 
 In this section we propose to systematically address these biases with the aim to reach more accurate estimates of the real distribution of occupations.
 
-## Functions to address bias TO DO
 We do this by constructing functions to each source of bias.
 
-### Gender TO DO ¨
+## Functions to address bias TO DO
+### Gender bias ONGOING ¨
 We multiply women-only occupations (which for simplicity we take to be those with female-only names), by a corrective factor, derived from the men/women ratio in funerary inscriptions. 
 
 ```{r extract info about gender inscriptions}
@@ -946,12 +945,13 @@ gender_bias <- function(table, bias){
 ```
 
 
-### Research TO DO
+### Research bias ONGOING
+#### Estimate population by geographical unit
+##### Notes on population estimation
 To establish which geographical areas are overrepresented in inscriptions, we can use the ratio between funerary inscriptions and population, the assumption being that deaths happen (theoretically) proportionally to the population.
 
 To do this, we need to estimate the total population residing in each geographical unit.  
 
-#### Population by geographical unit
 As far as we know, there are no estimates of the Ancient Roman population at the provincial level (and certainly not within the borders of modern nations or town hinterlands).
 
 Instead, a set of estimates exist for the total population in 10 macroregions of the Empire (Table 3.1 in "Scheidel W. Demography. In: Scheidel W, Morris I, Saller RP, eds. The Cambridge Economic History of the Greco-Roman World. Cambridge University Press; 2007:38-86") and for the population of individual urban units (Hanson).
@@ -1178,7 +1178,6 @@ macroregion_pop_165AD_df <- data.frame(
 ```
 
 It is easy to have estimates of the rural population of each macroregion by subtracting the urban population from the estimates of the urban population.
-
 ```{r total, rural urban and rural population of the macroregions}
 # total and urban population 
 macroregion_pop_165AD_rural_urban_df <- left_join(
@@ -1253,12 +1252,11 @@ Finally save these results.
 ```
 
 ##### Countries
-We perform a similar operation to estimate the urban and rural population who lived within the borders of modern day countries. 
+We perform a similar operation to estimate the urban and rural population who lived within the borders of modern day countries.
 We estimate the urban population using Hanson's dataset. 
 We estimate the rural population by distributing the above estimates of rural populations proportionately to the percentage of area of a province falling in each country.
 E.g. The province "Sicilia" falls 100% within the modern country of Italy, hence we assign all of Sicilia's rural population to Italy.
 Instead if another province falls 50% in in a country and 50% in another country, we assign half of the province's rural population to the each country. (NEED TO FIND A CONCRETE EXAMPLE)
-
 ```{r country and provinces sf}
 # add area info to countries
 world_sf$area <- st_area(world_sf)
@@ -1268,6 +1266,7 @@ intersections <- st_intersection(world_sf,provinces) %>%
   dplyr::select(c("iso3","area","province","geometry")) %>% # select only needed columns
   setNames(c("country","country_area","province","geometry"))
 ```
+
 Compute the area of the intersections
 ```{r country and provinces areas}
 # calculate the area of each intersection
@@ -1313,7 +1312,6 @@ intersections_df$prop_intersection_area <- intersections_df$intersection_area/in
 ```
 
 Now to estimate the rural population of each intersection, take the rural population of the province it belongs to and multiply by the proportion of the total area of the province (or more precisely of the sum of the intersections belonging to the province) that falls within the intersection.
-
 ```{r rural population of intersections}
 # merge info on intersections and rural population of the provinces
 intersections_pop_full_info_df <- left_join(
@@ -1374,8 +1372,9 @@ intersections_pop_full_info_df$intersection_tot_pop_max <-
   intersections_pop_full_info_df$intersection_rural_pop_max + 
 intersections_pop_full_info_df$intersection_urban_pop
 ```
-Check the dataset for consistency: RK THIS ALMOST WORKS BUT NOT QUITE
 
+Check the dataset for consistency: RK THIS ALMOST WORKS BUT NOT QUITE
+Remark: the match is not perfect: there must be a city that is classifies as closer to Achaia than Asia once the intersections are taken. This should not be a huge problem in principle as the difference is small. But it is worth to take it under consideration.
 ```{r check that the total for the provinces almost matches}
 intersections_pop_full_info_df %>% 
   group_by(province) %>%
@@ -1385,37 +1384,109 @@ intersections_pop_full_info_df %>%
   )
 ```
 
-Remark: the match is not perfect: there must be a city that is classifies as closer to Achaia than Asia once the intersections are taken. This should not be a huge problem in principle as the difference is small. But it is worth to take it under consideration.
-
 Finally, group the intersections by country and save the population data
-
 ```{r group the intersections by country and save the population data}
 # compute the population
-countries_pop_full_info_df <-  intersections_pop_full_info_df %>% 
+countries_population_df <-  intersections_pop_full_info_df %>% 
   group_by(country) %>% 
   summarize(urban_pop= sum(intersection_urban_pop),
             rural_pop_min = sum(intersection_rural_pop_min),
-            rural_pop_max = sum(intersection_rural_pop_min),
+            rural_pop_max = sum(intersection_rural_pop_max),
             tot_pop_min = sum(intersection_tot_pop_min),
             tot_pop_max = sum(intersection_tot_pop_max))
 
 # check validity of grand total
-(sum(provinces_macroregions_full_info_df$tot_pop_min) == sum(countries_pop_full_info_df$tot_pop_min) && sum(provinces_macroregions_full_info_df$tot_pop_max) == sum(countries_pop_full_info_df$tot_pop_max)) 
+(sum(provinces_macroregions_full_info_df$tot_pop_min) == sum(countries_population_df$tot_pop_min) && sum(provinces_macroregions_full_info_df$tot_pop_max) == sum(countries_population_df$tot_pop_max)) 
 
 # save results
-write.csv(countries_pop_full_info_df,
-          "../../results/economic_complexity/countries_population.csv")
-write.csv(intersections_pop_full_info_df,
-          "../../results/economic_complexity/intersections_population_full_info.csv")
+#write.csv(countries_population_df,
+#          "../../results/economic_complexity/countries_population.csv")
+#write.csv(intersections_pop_full_info_df,
+#          "../../results/economic_complexity/intersections_population_full_info.csv")
+```
+
+#### Ratios population/epitaph TO REDO WITH UPDATED COUNTS GIVEN THE LANGUAGE
+First, compute the ratios of the people per epitaph
+```{r population/epitaph by country}
+# countries
+# count epitaphs by country
+epitaphs_in_countries_counts <- epitaphs_in_countries$country %>% 
+  table() %>%
+  as.data.frame() %>%
+  setNames(c("country","epitaphs"))
+
+# initialise data frame of bias 
+ratio_epitaphs_pop_countries <- data.frame(
+  country = row_names_c) %>% 
+  left_join(countries_population_df[,c("country","tot_pop_min","tot_pop_max")]) %>%
+  left_join(epitaphs_in_countries_counts)
+
+# add columns of ratios between population estimates and epitaphs counts
+ratio_epitaphs_pop_countries$people_per_epitaph_min <- ratio_epitaphs_pop_countries$tot_pop_min/ratio_epitaphs_pop_countries$epitaphs
+ratio_epitaphs_pop_countries$people_per_epitaph_max <- ratio_epitaphs_pop_countries$tot_pop_max/ratio_epitaphs_pop_countries$epitaphs
+
+# note that Georgia has no population data (as a result of the intersection with the provinces) and no epitaphs
+#row_names_c[which(!row_names_c%in%unique(epitaphs_in_countries$country))]
+
+# hence we artificially assign to it the ratio across the data set
+ratio_epitaphs_pop_countries[ratio_epitaphs_pop_countries$country=="GEO","people_per_epitaph_min"] <-
+  sum(countries_population_df$tot_pop_min)/nrow(epitaphs_in_countries)
+ratio_epitaphs_pop_countries[ratio_epitaphs_pop_countries$country=="GEO","people_per_epitaph_max"] <-
+  sum(countries_population_df$tot_pop_max)/nrow(epitaphs_in_countries)
+```
+
+Repeat the same for provinces.
+```{r population/epitaph by province}
+# province
+# count epitaphs by province
+epitaphs_in_provinces_counts <- epitaphs_in_provinces$province %>% 
+  table() %>%
+  as.data.frame() %>%
+  setNames(c("province","epitaphs"))
+
+# initialise data frame of bias 
+ratio_epitaphs_pop_provinces <- data.frame(
+  province = row_names_p) %>% 
+  left_join(provinces_population_df[,c("province","tot_pop_min","tot_pop_max")]) %>%
+  left_join(epitaphs_in_provinces_counts)
+
+# add columns of ratios between population estimates and epitaphs counts
+ratio_epitaphs_pop_provinces$people_per_epitaph_min <- ratio_epitaphs_pop_provinces$tot_pop_min/ratio_epitaphs_pop_provinces$epitaphs
+ratio_epitaphs_pop_provinces$people_per_epitaph_max <- ratio_epitaphs_pop_provinces$tot_pop_max/ratio_epitaphs_pop_provinces$epitaphs
+
+# for the Eastern and North-Eastern border we do not have estimates. For now we assign the average (we might have to delete them from the tables)
+ratio_epitaphs_pop_provinces[ratio_epitaphs_pop_provinces$province %in% c("Eastern border","North-eastern border"),
+                        "people_per_epitaph_min"] <-
+  sum(provinces_population_df$tot_pop_min)/nrow(epitaphs_in_provinces)
+ratio_epitaphs_pop_provinces[ratio_epitaphs_pop_provinces$province %in% c("Eastern border","North-eastern border"),"people_per_epitaph_max"] <-
+  sum(provinces_population_df$tot_pop_max)/nrow(epitaphs_in_provinces)
 
 ```
 
-Finally
+Now, save the results BUT NOTE THAT THEY WILL HAVE TO BE REVIEWED
+```{r save results}
+# save results
+write.csv(ratio_epitaphs_pop_countries,
+          "../../results/economic_complexity/ratio_epitaphs_pop_countries.csv")
+write.csv(ratio_epitaphs_pop_provinces,
+          "../../results/economic_complexity/ratio_epitaphs_pop_provinces.csv")
 
-ZIPPO
+```
+
+
 
 ### Occupation TO DO
 Add farmers (proportionally to total population. Why?)
+
+```{r}
+pleiades <- st_read("C:/Users/au732923/OneDrive - Aarhus Universitet/Desktop/Minerva/data/ancient_sites_pleiades/pleiades_sett_vil_st_fort_clean.shp")
+
+villas <- pleiades[str_detect(pleiades$featureTyp,"villa"),]
+```
+
+
+
+
 
 ### Language TO DO
 Assume the same distribution of professions in the (not analysed) Greek inscriptions and use their locations to proportionally increase numbers in the provinces. 
@@ -1424,6 +1495,6 @@ NEED GREEK DATA
 ## Specialisation function for updates TO DO NOT PRIORITY
 We create a function to subdivide an occupation into suboccupations as new evidence is gathered
 
-## Apply bias correction (in different orders)
+## Apply bias correction TO DO (in different orders)
 
 FILES TO USE: country_table, province_table, cities_table_list
