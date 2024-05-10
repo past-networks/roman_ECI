@@ -116,8 +116,10 @@ EDH_people <- read_csv("C:/Users/au732923/OneDrive - Aarhus Universitet/Desktop/
 
 # epitaphs
 epitaphs <- inscriptions[inscriptions$type_of_inscription_auto %in% c("epitaph"),]
-```
 
+# greek inscriptions
+greek_inscriptions <- read_parquet("../../data/economic_complexity/GIST_v1-1.parquet")
+```
 
 Read the data on geographical units. THESE ARE LOCAL PATHS. NEED INSTRUCTION ON HOW TO DOWNLOAD
 ```{r geographical data}
@@ -235,6 +237,11 @@ inscriptions_w_occupations_sf <- st_as_sf(inscriptions_w_occupations,
 epitaphs_sf <- st_as_sf(epitaphs,
                         coords = c("Longitude","Latitude"),
                         crs = crs("epsg:4326"))
+
+# greek inscriptions (See if more columns will be necessary)
+greek_inscriptions_sf <- st_as_sf(na.omit(greek_inscriptions[,c("PHI_ID","Longitude","Latitude")]),
+                                  coords = c("Longitude","Latitude"),
+                                  crs = crs("epsg:4326"))
 ```
 
 ## Modern countries
@@ -349,6 +356,48 @@ epitaphs_by_country_plot <- ggplot() +
 print(epitaphs_by_country_plot)
 #ggsave("../../figures/economic_complexity/epitaphs_by_country.pdf", epitaphs_by_country_plot, width = 7, height = 5.5)
 #ggsave("../../figures/economic_complexity/epitaphs_by_country.jpeg", epitaphs_by_country_plot, width = 7, height = 5.5, dpi = 300)
+```
+
+### Greek inscriptions
+Finally do the same with the Greek inscriptions.
+Associate Greek inscriptions to the closest country.
+```{r epitaphs in countries}
+greek_inscriptions_coordinates <- data.frame(st_coordinates(greek_inscriptions_sf)) %>% 
+  setNames(c("Longitude","Latitude"))
+
+greek_inscriptions_in_countries <- cbind(greek_inscriptions_sf,
+                                   country = world_sf$iso3[st_nearest_feature(greek_inscriptions_sf,world_sf)],
+                                   greek_inscriptions_coordinates)
+```
+
+Map the Greek inscriptions by country
+```{r map epitaphs by country DO NOT RUN NEEDS TO BE MODIFIED}
+# base map
+greek_inscriptions_by_country_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = greek_inscriptions_in_countries,
+             aes(color = country)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(greek_inscriptions_coordinates$Longitude), 
+                    max(greek_inscriptions_coordinates$Longitude)), 
+           ylim = c(min(greek_inscriptions_coordinates$Latitude), 
+                    max(greek_inscriptions_coordinates$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(greek_inscriptions_by_country_plot)
+#ggsave("../../figures/economic_complexity/greek_inscriptions_by_country.pdf", greek_inscriptions_by_country_plot, width = 7, height = 5.5)
+#ggsave("../../figures/economic_complexity/greek_inscriptions_by_country.jpeg", greek_inscriptions_by_country_plot, width = 7, height = 5.5, dpi = 300)
 ```
 
 ## Roman provinces
@@ -581,6 +630,82 @@ print(epitaphs_by_province_plot)
 #ggsave("../../figures/economic_complexity/epitaphs_by_province.pdf", epitaphs_by_province_plot, width = 15, height = 5.5)
 #ggsave("../../figures/economic_complexity/epitaphs_by_province.jpeg", epitaphs_by_province_plot, width = 15, height = 5.5, dpi = 300)
 ```
+
+
+### Greek inscriptions
+The same process is repeated also for the greek inscriptions.
+Associate the inscriptions to the province they fall into.
+```{r}
+greek_inscriptions_in_provinces <- st_join(greek_inscriptions_sf, provinces)
+# remark: 6 inscriptions fall at the borders between two provinces. For the time being, we assign them at random (may look for the impact of this uncertainty later, but it's likely very small as the counts are large)
+greek_inscriptions_in_provinces <- greek_inscriptions_in_provinces[which(!duplicated(greek_inscriptions_in_provinces$PHI_ID)),]
+
+greek_inscriptions_in_provinces$Latitude <- greek_inscriptions_coordinates$Latitude
+greek_inscriptions_in_provinces$Longitude <- greek_inscriptions_coordinates$Longitude
+```
+
+Notice that 30945 inscriptions lie outside of the borders of the provinces.
+```{r epitaphs without a province}
+unassigned_greek_inscriptions_index <- which(is.na(greek_inscriptions_in_provinces$province))
+unassigned_greek_inscriptions <- greek_inscriptions_in_provinces[unassigned_greek_inscriptions_index,]
+unassigned_greek_inscriptions_sf <- st_as_sf(unassigned_greek_inscriptions,
+                                             coords = c("Longitude","Latitude"),
+                                             crs = crs("epsg:4326"))
+```
+
+We find the distance between these and the closest province.
+```{r find closest province to unassigned epitaphs}
+# closest province index
+unassigned_greek_inscriptions$closest_province_index <- st_nearest_feature(unassigned_greek_inscriptions_sf,provinces)
+ 
+# find unique list of locations
+unassigned_greek_inscriptions_unique_locations <- unassigned_greek_inscriptions[,c("Longitude","Latitude","closest_province_index")] %>% unique()
+unassigned_greek_inscriptions_unique_locations_sf <- st_as_sf(unassigned_greek_inscriptions_unique_locations,
+                                                         coords = c("Longitude","Latitude"),
+                                                         crs = crs("epsg:4326"))
+
+# compute distance to the closest province
+unassigned_greek_inscriptions_unique_locations$distance_to_province <- st_distance(
+  unassigned_greek_inscriptions_unique_locations_sf,
+  provinces[unassigned_greek_inscriptions_unique_locations$closest_province_index,],
+  by_element = TRUE
+)
+
+unassigned_greek_inscriptions_unique_locations <- unassigned_greek_inscriptions_unique_locations %>% st_drop_geometry()
+
+# 
+a <- unassigned_greek_inscriptions %>% left_join(
+  unassigned_greek_inscriptions_unique_locations,
+  by = c("Longitude","Latitude")
+)
+```
+
+```{r assign epitaphs to closest province if very close}
+epitaphs_in_provinces$province[unassigned_epitaphs_index] <- ifelse(
+  unassigned_epitaphs$distance_to_province < set_units(50000,"meters"),
+  unassigned_epitaphs$closest_province,
+  NA
+)
+```
+
+```{r manually assign epitaphs in Balearic, Achaia, Sicilia, and Britannia}
+# Balearic
+Balearic_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Hispania Citerior","LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Balearic_epitaphs_id$`LIST-ID`] <- "Hispania Citerior"
+
+# Achaia
+Achaia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Achaia","LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Achaia_epitaphs_id$`LIST-ID`] <- "Achaia"
+
+# Sicila
+Sicilia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Sicilia","LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Sicilia_epitaphs_id$`LIST-ID`] <- "Sicilia"
+
+# Britannia
+Britannia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Britannia","LIST-ID"]
+epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Britannia_epitaphs_id$`LIST-ID`] <- "Britannia"
+```
+
 
 
 ## Urban inscriptions
@@ -1470,26 +1595,21 @@ write.csv(ratio_epitaphs_pop_countries,
           "../../results/economic_complexity/ratio_epitaphs_pop_countries.csv")
 write.csv(ratio_epitaphs_pop_provinces,
           "../../results/economic_complexity/ratio_epitaphs_pop_provinces.csv")
-
 ```
-
-
 
 ### Occupation TO DO
 Add farmers (proportionally to total population. Why?)
-
-```{r}
+```{r find villas from Pleiades dataset}
 pleiades <- st_read("C:/Users/au732923/OneDrive - Aarhus Universitet/Desktop/Minerva/data/ancient_sites_pleiades/pleiades_sett_vil_st_fort_clean.shp")
 
 villas <- pleiades[str_detect(pleiades$featureTyp,"villa"),]
 ```
 
-
-
-
-
 ### Language TO DO
 Assume the same distribution of professions in the (not analysed) Greek inscriptions and use their locations to proportionally increase numbers in the provinces. 
+
+
+
 NEED GREEK DATA
 
 ## Specialisation function for updates TO DO NOT PRIORITY
