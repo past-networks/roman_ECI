@@ -637,7 +637,7 @@ The same process is repeated also for the greek inscriptions.
 Associate the inscriptions to the province they fall into.
 ```{r}
 greek_inscriptions_in_provinces <- st_join(greek_inscriptions_sf, provinces)
-# remark: 6 inscriptions fall at the borders between two provinces. For the time being, we assign them at random (may look for the impact of this uncertainty later, but it's likely very small as the counts are large)
+# remark: 6 inscriptions fall on the borders between two provinces. For the time being, we assign them at random (may look for the impact of this uncertainty later, but it's likely very small as the counts are large)
 greek_inscriptions_in_provinces <- greek_inscriptions_in_provinces[which(!duplicated(greek_inscriptions_in_provinces$PHI_ID)),]
 
 greek_inscriptions_in_provinces$Latitude <- greek_inscriptions_coordinates$Latitude
@@ -647,66 +647,111 @@ greek_inscriptions_in_provinces$Longitude <- greek_inscriptions_coordinates$Long
 Notice that 30945 inscriptions lie outside of the borders of the provinces.
 ```{r epitaphs without a province}
 unassigned_greek_inscriptions_index <- which(is.na(greek_inscriptions_in_provinces$province))
-unassigned_greek_inscriptions <- greek_inscriptions_in_provinces[unassigned_greek_inscriptions_index,]
-unassigned_greek_inscriptions_sf <- st_as_sf(unassigned_greek_inscriptions,
-                                             coords = c("Longitude","Latitude"),
-                                             crs = crs("epsg:4326"))
+unassigned_greek_inscriptions_sf <- greek_inscriptions_in_provinces[unassigned_greek_inscriptions_index,]
 ```
 
 We find the distance between these and the closest province.
 ```{r find closest province to unassigned epitaphs}
 # closest province index
-unassigned_greek_inscriptions$closest_province_index <- st_nearest_feature(unassigned_greek_inscriptions_sf,provinces)
- 
+unassigned_greek_inscriptions_sf$closest_province_index <- st_nearest_feature(unassigned_greek_inscriptions_sf,
+                                                                              provinces) 
+
 # find unique list of locations
-unassigned_greek_inscriptions_unique_locations <- unassigned_greek_inscriptions[,c("Longitude","Latitude","closest_province_index")] %>% unique()
-unassigned_greek_inscriptions_unique_locations_sf <- st_as_sf(unassigned_greek_inscriptions_unique_locations,
-                                                         coords = c("Longitude","Latitude"),
-                                                         crs = crs("epsg:4326"))
+unassigned_greek_inscriptions_unique_locations_sf <- unassigned_greek_inscriptions_sf[,c("geometry","closest_province_index")] %>% unique()
 
 # compute distance to the closest province
-unassigned_greek_inscriptions_unique_locations$distance_to_province <- st_distance(
+unassigned_greek_inscriptions_unique_locations_sf$distance_to_province <- st_distance(
   unassigned_greek_inscriptions_unique_locations_sf,
-  provinces[unassigned_greek_inscriptions_unique_locations$closest_province_index,],
+  provinces[unassigned_greek_inscriptions_unique_locations_sf$closest_province_index,],
   by_element = TRUE
 )
 
+# transform in df 
+unassigned_greek_inscriptions_unique_locations <- unassigned_greek_inscriptions_unique_locations_sf 
+unassigned_greek_inscriptions_unique_locations[,c("Longitude","Latitude")] <- st_coordinates(unassigned_greek_inscriptions_unique_locations_sf)
 unassigned_greek_inscriptions_unique_locations <- unassigned_greek_inscriptions_unique_locations %>% st_drop_geometry()
 
-# 
-a <- unassigned_greek_inscriptions %>% left_join(
+
+# transform in df
+unassigned_greek_inscriptions <- unassigned_greek_inscriptions_sf
+unassigned_greek_inscriptions[,c("Longitude","Latitude")] <- st_coordinates(unassigned_greek_inscriptions_sf)
+unassigned_greek_inscriptions <- unassigned_greek_inscriptions %>% st_drop_geometry()
+  
+  
+# merge info to retrieve full list of unassigned inscriptions with distances to nearest province
+unassigned_greek_inscriptions <- unassigned_greek_inscriptions %>% left_join(
   unassigned_greek_inscriptions_unique_locations,
-  by = c("Longitude","Latitude")
+  by = c("Longitude","Latitude","closest_province_index")
 )
+
+# retrieve name of the province for greater readability
+unassigned_greek_inscriptions$closest_province <-  provinces$province[unassigned_greek_inscriptions$closest_province_index]
+
 ```
 
+THIS SECTION HAS TO BE IMPROVED FOR CONSISTENCY WITH THE OTHER ONES.
+
+Assign the province if the distance is less than 100km
 ```{r assign epitaphs to closest province if very close}
-epitaphs_in_provinces$province[unassigned_epitaphs_index] <- ifelse(
-  unassigned_epitaphs$distance_to_province < set_units(50000,"meters"),
-  unassigned_epitaphs$closest_province,
+greek_inscriptions_in_provinces$province[unassigned_greek_inscriptions_index] <- ifelse(
+  unassigned_greek_inscriptions$distance_to_province < set_units(100000,"meters"),
+  unassigned_greek_inscriptions$closest_province,
   NA
 )
 ```
 
+Deal manually with Balearic Islands and Aegean Sea.
+These are island regions for which small precision issues may lead to misclassification.
 ```{r manually assign epitaphs in Balearic, Achaia, Sicilia, and Britannia}
 # Balearic
-Balearic_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Hispania Citerior","LIST-ID"]
-epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Balearic_epitaphs_id$`LIST-ID`] <- "Hispania Citerior"
+Balearic_greek_inscriptions_id <- unassigned_greek_inscriptions[unassigned_greek_inscriptions$closest_province=="Hispania Citerior","PHI_ID"]
+greek_inscriptions_in_provinces$province[greek_inscriptions_in_provinces$PHI_ID %in% Balearic_greek_inscriptions_id$PHI_ID] <- "Hispania Citerior"
 
 # Achaia
-Achaia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Achaia","LIST-ID"]
-epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Achaia_epitaphs_id$`LIST-ID`] <- "Achaia"
+Achaia_greek_inscriptions_id <- unassigned_greek_inscriptions[unassigned_greek_inscriptions$closest_province=="Achaia","PHI_ID"]
+greek_inscriptions_in_provinces$province[greek_inscriptions_in_provinces$PHI_ID %in% Achaia_greek_inscriptions_id$PHI_ID] <- "Achaia"
 
-# Sicila
-Sicilia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Sicilia","LIST-ID"]
-epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Sicilia_epitaphs_id$`LIST-ID`] <- "Sicilia"
+# Creta
+Creta_greek_inscriptions_id <- unassigned_greek_inscriptions[unassigned_greek_inscriptions$closest_province=="Creta","PHI_ID"]
+greek_inscriptions_in_provinces$province[greek_inscriptions_in_provinces$PHI_ID %in% Creta_greek_inscriptions_id$PHI_ID] <- "Creta"
 
-# Britannia
-Britannia_epitaphs_id <- unassigned_epitaphs[unassigned_epitaphs$closest_province=="Britannia","LIST-ID"]
-epitaphs_in_provinces$province[epitaphs_in_provinces$`LIST-ID` %in% Britannia_epitaphs_id$`LIST-ID`] <- "Britannia"
+# Asia
+Asia_greek_inscriptions_id <- unassigned_greek_inscriptions[unassigned_greek_inscriptions$closest_province=="Asia","PHI_ID"]
+greek_inscriptions_in_provinces$province[greek_inscriptions_in_provinces$PHI_ID %in% Asia_greek_inscriptions_id$PHI_ID] <- "Asia"
 ```
 
+Note that several inscriptions remain unclassified: these lie to the East of the Roman empire, but we deem them too distant to be reasonably associated with specific provinces.
 
+We plot the results:
+
+```{r greek inscriptions by province}
+# base map
+greek_inscriptions_by_province_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = greek_inscriptions_in_provinces,
+             aes(color = province)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(greek_inscriptions_coordinates$Longitude), 
+                    max(greek_inscriptions_coordinates$Longitude)), 
+           ylim = c(min(greek_inscriptions_coordinates$Latitude), 
+                    max(greek_inscriptions_coordinates$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(greek_inscriptions_by_province_plot)
+#ggsave("../../figures/economic_complexity/greek_inscriptions_by_province.pdf", greek_inscriptions_by_province_plot, width = 12, height = 5.5)
+#ggsave("../../figures/economic_complexity/greek_inscriptions_by_province.jpeg", greek_inscriptions_by_province_plot, width = 12, height = 5.5, dpi = 300)
+```
 
 ## Urban inscriptions
 Associate each inscription to the closest town in the Pleiades data set
@@ -1606,7 +1651,72 @@ villas <- pleiades[str_detect(pleiades$featureTyp,"villa"),]
 ```
 
 ### Language TO DO
-Assume the same distribution of professions in the (not analysed) Greek inscriptions and use their locations to proportionally increase numbers in the provinces. 
+Many inscriptions found within the limits of the Roman Empire were written in Greek. These were primarily concentrated in the Eastern Roman Empire. We need to account for them to avoid language bias.
+
+In this section we use the counts of greek inscriptions by geographical units that were computed in the previous sections.
+We assume the same distribution of professions in the (not analysed) Greek inscriptions and use their locations to proportionally adjust the occupation tables in the geographical units. 
+
+Create a table of counts of greek-inscription by geographical unit (country or province).
+```{r table of greek-inscriptions by location}
+# modern country
+greek_inscriptions_in_countries_counts <- table(greek_inscriptions_in_countries$country)
+greek_inscriptions_in_countries_counts_df <- as.data.frame(greek_inscriptions_in_countries_counts) %>% setNames(c("country","frequency"))
+
+# province
+greek_inscriptions_in_provinces_counts <- table(greek_inscriptions_in_provinces$province)
+greek_inscriptions_in_provinces_counts_df <- as.data.frame(greek_inscriptions_in_provinces_counts) %>% setNames(c("province","frequency"))
+```
+
+As it was the case of Latin inscriptions, only a small proportion of all Greek inscriptions were likely occupation-related.
+We compute the proportion of occupation-related inscriptions among all Latin inscriptions and assume the same proportion holds for Greek inscriptions to adjust the inscriptions counts.
+We adjust the above tables accordingly to retrieve tables of estimated counts of occupation-related greek inscriptions by geographical unit.
+```{r adjust counts for occupation related inscriptions}
+# proportion of occupation-related inscriptions among all Latin inscriptions
+proportion_occupation_related_Latin_inscriptions <- nrow(inscriptions_w_occupations)/nrow(inscriptions)
+
+# obtain estimates of occupation-related greek inscriptions
+
+# country
+greek_inscriptions_w_occupations_in_countries_counts <- greek_inscriptions_in_countries_counts*proportion_occupation_related_Latin_inscriptions 
+greek_inscriptions_w_occupations_in_countries_counts_df <- as.data.frame(greek_inscriptions_w_occupations_in_countries_counts) %>% setNames(c("country","frequency"))
+
+#province  
+greek_inscriptions_w_occupations_in_provinces_counts <- greek_inscriptions_in_provinces_counts*proportion_occupation_related_Latin_inscriptions 
+greek_inscriptions_w_occupations_in_provinces_counts_df <- as.data.frame(greek_inscriptions_w_occupations_in_provinces_counts) %>% setNames(c("province","frequency"))  
+
+# Remark this are not rounded yet. We'll only round after we multiply by the expected number of occupations
+```
+Remark that all the values that will follow in this section will be estimates and not real count.
+For that, we would need an in-depth analysis of Greek inscriptions that is beyond the scope of this study. 
+
+Compute the average number of occupations on each occupation-related inscription from the Latin data set.
+Bonus: compute the distribution of the number of occupation-related inscriptions.
+Assign a count of occupations to each occupation-related inscription based on this distribution.
+
+```{r}
+# set seed for reproducibility
+set.seed(123)
+
+# define the original distribution
+n_occupations_per_inscription_Latin <- inscriptions_w_occupations$occups_N
+
+# sample from it with replacement using bootstrapping  
+n_iterations <- 1000
+a <- replicate(n_iterations,
+                     sample(n_occupations_per_inscription_Latin, 
+                            size = round(sum(greek_inscriptions_w_occupations_in_provinces_counts)),
+                            replace = TRUE))
+
+# the result is a 8339 * 1000 matrix of samples
+```
+
+
+
+
+
+For each geographical unit, we have a distribution of occupations as emerged from the Latin inscriptions.
+Use it to redistribute proportionally the greek occupation counts to specific occupations (in each province).
+
 
 
 
