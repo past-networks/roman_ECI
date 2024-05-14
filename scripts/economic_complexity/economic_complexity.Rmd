@@ -1684,38 +1684,160 @@ greek_inscriptions_w_occupations_in_countries_counts_df <- as.data.frame(greek_i
 greek_inscriptions_w_occupations_in_provinces_counts <- greek_inscriptions_in_provinces_counts*proportion_occupation_related_Latin_inscriptions 
 greek_inscriptions_w_occupations_in_provinces_counts_df <- as.data.frame(greek_inscriptions_w_occupations_in_provinces_counts) %>% setNames(c("province","frequency"))  
 
-# Remark this are not rounded yet. We'll only round after we multiply by the expected number of occupations
+# We round these values (NEED TO SEE IF IT MAKES SENSE)
+greek_inscriptions_w_occupations_in_countries_counts_df$frequency_rounded <- round(greek_inscriptions_w_occupations_in_countries_counts_df$frequency) 
+greek_inscriptions_w_occupations_in_provinces_counts_df$frequency_rounded <- round(greek_inscriptions_w_occupations_in_provinces_counts_df$frequency)
 ```
+
+
+
+
+
 Remark that all the values that will follow in this section will be estimates and not real count.
 For that, we would need an in-depth analysis of Greek inscriptions that is beyond the scope of this study. 
 
 Compute the average number of occupations on each occupation-related inscription from the Latin data set.
 Bonus: compute the distribution of the number of occupation-related inscriptions.
 Assign a count of occupations to each occupation-related inscription based on this distribution.
-
 ```{r}
 # set seed for reproducibility
 set.seed(123)
 
-# define the original distribution
+# define the original distribution of the number of occupations per occupation-related Latin inscription 
 n_occupations_per_inscription_Latin <- inscriptions_w_occupations$occups_N
 
-# sample from it with replacement using bootstrapping  
-n_iterations <- 1000
-a <- replicate(n_iterations,
-                     sample(n_occupations_per_inscription_Latin, 
-                            size = round(sum(greek_inscriptions_w_occupations_in_provinces_counts)),
-                            replace = TRUE))
+# the distribution is heavily left-skewed with a median and mean of 1 and ~1.24 respectively
+hist(n_occupations_per_inscription_Latin, 100)
 
-# the result is a 8339 * 1000 matrix of samples
+# we sample from the distribution with replacement as many times as the total estimated number of occupation-related Greek inscriptions. 
+# we thus obtain a possible number of occupations per each Greek occupation-related inscription.
+# we repeat the process 1000 times.
+n_iterations <- 1000
+sampled_n_occupations_per_greek_inscriptions_in_countries <- replicate(
+  n_iterations,
+  sample(n_occupations_per_inscription_Latin,
+         size = round(sum(greek_inscriptions_w_occupations_in_countries_counts_df$frequency_rounded)),
+         replace = TRUE))
+
+sampled_n_occupations_per_greek_inscriptions_in_provinces <- replicate(
+  n_iterations,
+  sample(n_occupations_per_inscription_Latin,
+         size = round(sum(greek_inscriptions_w_occupations_in_provinces_counts_df$frequency_rounded)),
+         replace = TRUE))
 ```
 
+Note that the number of occupation per occupation-related Greek inscription is approximately normally distributed around the mean of the number of occupations per occupation-related Latin inscription (as expected)
+```{r visualise mean number of occupations per occupation-related Greek inscriptions}
+# by country
+hist(colMeans(sampled_n_occupations_per_greek_inscriptions_in_countries),100)
+abline(v=mean(n_occupations_per_inscription_Latin), col="red")
 
+# by province
+hist(colMeans(sampled_n_occupations_per_greek_inscriptions_in_provinces),100)
+abline(v=mean(n_occupations_per_inscription_Latin), col="red")
+```
 
+Say that a geographical unit "g_i" contains "n_i" occupation-related inscriptions. 
+By summing the first n_1 values of a column of the above sample, we obtain the total number of occupations in g_1. 
+By summing the n_2 values between n_1+1 and n_1+n_2 we obtain the total number of occupations in g_2. etc.
+We thus obtain counts of occupations in each geographical unit.
+```{r total occupations by country (from Greek inscriptions)}
+# avoid zeros for simplicity
+greek_inscriptions_w_occupations_in_countries_counts_no_zeros_df <- greek_inscriptions_w_occupations_in_countries_counts_df[!greek_inscriptions_w_occupations_in_countries_counts_df$frequency_rounded==0,]
 
+# Initialize an empty matrix to store the results
+occupations_in_greek_inscriptions_by_country_counts <- matrix(
+  nrow = nrow(greek_inscriptions_w_occupations_in_countries_counts_no_zeros_df), 
+  ncol = ncol(sampled_n_occupations_per_greek_inscriptions_in_countries))
+
+# Loop through each pair of start and end indices
+end_idx <- 0
+start_idx <- 1
+
+for (i in 1:nrow(greek_inscriptions_w_occupations_in_countries_counts_no_zeros_df)) {
+  # define end_index
+  end_idx <- end_idx + 
+    greek_inscriptions_w_occupations_in_countries_counts_no_zeros_df$frequency_rounded[i]
+  
+  # Calculate the column sums for the specified rows
+  if (end_idx > start_idx){
+    occupations_in_greek_inscriptions_by_country_counts[i, ] <-
+      colSums(sampled_n_occupations_per_greek_inscriptions_in_countries[start_idx:end_idx, ])
+  } else {
+    
+    occupations_in_greek_inscriptions_by_country_counts[i, ]<-
+      sampled_n_occupations_per_greek_inscriptions_in_countries[start_idx,]
+  }
+
+  # redefine start-index for next iteration
+  start_idx <- end_idx +1
+  
+  # verify
+  #all(colSums(sampled_n_occupations_per_greek_inscriptions_in_countries)==colSums(occupations_in_greek_inscriptions_by_country_counts))
+}
+
+# give meaningful names to rows and columns
+rownames(occupations_in_greek_inscriptions_by_country_counts) <-
+  greek_inscriptions_w_occupations_in_countries_counts_no_zeros_df$country
+colnames(occupations_in_greek_inscriptions_by_country_counts) <- paste0("it_",1:n_iterations)
+
+# transform in dataframe
+occupations_in_greek_inscriptions_by_country_counts_df <- data.frame(
+  country = greek_inscriptions_w_occupations_in_countries_counts_no_zeros_df$country
+) %>% cbind(occupations_in_greek_inscriptions_by_country_counts)
+```
+
+```{r total occupations by province (from Greek inscriptions)}
+# avoid zeros for simplicity
+greek_inscriptions_w_occupations_in_provinces_counts_no_zeros_df <- greek_inscriptions_w_occupations_in_provinces_counts_df[!greek_inscriptions_w_occupations_in_provinces_counts_df$frequency_rounded==0,]
+
+# Initialize an empty matrix to store the results
+occupations_in_greek_inscriptions_by_province_counts <- matrix(
+  nrow = nrow(greek_inscriptions_w_occupations_in_provinces_counts_no_zeros_df), 
+  ncol = ncol(sampled_n_occupations_per_greek_inscriptions_in_provinces))
+
+# Loop through each pair of start and end indices
+end_idx <- 0
+start_idx <- 1
+
+for (i in 1:nrow(greek_inscriptions_w_occupations_in_provinces_counts_no_zeros_df)) {
+  # define end_index
+  end_idx <- end_idx + 
+    greek_inscriptions_w_occupations_in_provinces_counts_no_zeros_df$frequency_rounded[i]
+  
+  # Calculate the column sums for the specified rows
+  if (end_idx > start_idx){
+    occupations_in_greek_inscriptions_by_province_counts[i, ] <-
+      colSums(sampled_n_occupations_per_greek_inscriptions_in_provinces[start_idx:end_idx, ])
+  } else {
+    
+    occupations_in_greek_inscriptions_by_province_counts[i, ]<-
+      sampled_n_occupations_per_greek_inscriptions_in_provinces[start_idx,]
+  }
+
+  # redefine start-index for next iteration
+  start_idx <- end_idx +1
+  
+  # verify
+  all(colSums(sampled_n_occupations_per_greek_inscriptions_in_provinces)==colSums(occupations_in_greek_inscriptions_by_province_counts))
+}
+
+# give meaningful names to rows and columns
+rownames(occupations_in_greek_inscriptions_by_province_counts) <-
+  greek_inscriptions_w_occupations_in_provinces_counts_no_zeros_df$province
+colnames(occupations_in_greek_inscriptions_by_province_counts) <- paste0("it_",1:n_iterations)
+
+# transform in dataframe
+occupations_in_greek_inscriptions_by_province_counts_df <- data.frame(
+  province = greek_inscriptions_w_occupations_in_provinces_counts_no_zeros_df$province
+) %>% cbind(occupations_in_greek_inscriptions_by_province_counts)
+```
 
 For each geographical unit, we have a distribution of occupations as emerged from the Latin inscriptions.
-Use it to redistribute proportionally the greek occupation counts to specific occupations (in each province).
+We use it to redistribute proportionally the greek occupation counts to specific occupations (in each province).
+
+
+
 
 
 
