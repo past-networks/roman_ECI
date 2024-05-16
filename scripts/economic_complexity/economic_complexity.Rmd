@@ -1810,7 +1810,6 @@ for (i in 1:nrow(greek_inscriptions_w_occupations_in_provinces_counts_no_zeros_d
     occupations_in_greek_inscriptions_by_province_counts[i, ] <-
       colSums(sampled_n_occupations_per_greek_inscriptions_in_provinces[start_idx:end_idx, ])
   } else {
-    
     occupations_in_greek_inscriptions_by_province_counts[i, ]<-
       sampled_n_occupations_per_greek_inscriptions_in_provinces[start_idx,]
   }
@@ -1834,8 +1833,89 @@ occupations_in_greek_inscriptions_by_province_counts_df <- data.frame(
 ```
 
 For each geographical unit, we have a distribution of occupations as emerged from the Latin inscriptions.
-We use it to redistribute proportionally the greek occupation counts to specific occupations (in each province).
+We want to use it to redistribute proportionally the greek occupation counts to specific occupations (in each province).
 
+However, we want to avoid unrealistic situations in which a very large number of Greek inscriptions is assigned very few occupation types, which would be the case for geographical units in which Greek was prevalent and Latin inscriptions very rare.
+
+To see if this situation could arise, we compare counts of Latin and Roman inscriptions by geographical unit.
+
+First by province:
+```{r Latin vs Greek counts by province}
+# compute total occupation counts by province from Latin inscriptions
+occupations_counts_Latin_Greek_comparison_province <- data.frame(
+  province = rownames(province_table),
+  Latin_counts = rowSums(province_table)
+  )
+rownames(occupations_counts_Latin_Greek_comparison_province) <- NULL
+
+# add Greek counts
+occupations_counts_Latin_Greek_comparison_province <- left_join(
+  occupations_counts_Latin_Greek_comparison_province,
+  occupations_in_greek_inscriptions_by_province_counts_df)
+
+# assign value zeros to the NA derived from provinces without Greek inscriptions
+occupations_counts_Latin_Greek_comparison_province[is.na(occupations_counts_Latin_Greek_comparison_province)] <- 0
+```
+
+Then by country: 
+```{r Latin vs Greek counts by country}
+# compute total occupation counts by province from Latin inscriptions
+occupations_counts_Latin_Greek_comparison_country <- data.frame(
+  country = rownames(country_table),
+  Latin_counts = rowSums(country_table)
+  )
+rownames(occupations_counts_Latin_Greek_comparison_country) <- NULL
+
+# add Greek counts
+occupations_counts_Latin_Greek_comparison_country <- left_join(
+  occupations_counts_Latin_Greek_comparison_country,
+  occupations_in_greek_inscriptions_by_country_counts_df)
+
+# assign value zeros to the NA derived from provinces without Greek inscriptions
+occupations_counts_Latin_Greek_comparison_country[is.na(occupations_counts_Latin_Greek_comparison_country)] <- 0
+```
+
+Inspection of the above df reveals that some provinces (resp countries) have very few Latin inscriptions by a large number of Greek inscriptions. 
+To mitigate the issue, we draw not just from the distribution of occupations in a geographical unit but also from those of their surroundings (say less than 100km. This is an arbitrary threshold meant to reflect similar environmental and social conditions TO BE DEBATED). 
+
+Find surroundings of the provinces and countries
+
+ZIPPO
+```{r surroundings of provinces and countries TO DO}
+# compute the distances between provinces
+distance_between_provinces <- st_distance(provinces) 
+rownames(distance_between_provinces) <- provinces$province
+colnames(distance_between_provinces) <- provinces$province
+
+# distance between countries: note it include countries beyond the borders of the empire that include greek inscriptions
+countries_in_area <- world_sf[world_sf$iso3 %in% occupations_in_greek_inscriptions_by_country_counts_df$country,]
+distance_between_countries <- st_distance(countries_in_area,countries_in_area)
+rownames(distance_between_countries) <- countries_in_area$iso3
+colnames(distance_between_countries) <- countries_in_area$iso3
+
+#THERE ARE SOME ISSUES HERE WITH PSE
+
+# note that PSE needs to be dealt specially because there are two polygon structures
+
+```
+
+
+
+
+
+
+Define sample set
+
+
+
+```{r}
+# for each province, sample with replacement from the sample set with sample size equal to the estimated number of occupation-related Greek inscriptions.
+
+sample(province_table,
+         size = round(sum(greek_inscriptions_w_occupations_in_countries_counts_df$frequency_rounded)),
+         replace = TRUE))
+
+```
 
 
 
