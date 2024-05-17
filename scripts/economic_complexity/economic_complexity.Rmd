@@ -1689,10 +1689,6 @@ greek_inscriptions_w_occupations_in_countries_counts_df$frequency_rounded <- rou
 greek_inscriptions_w_occupations_in_provinces_counts_df$frequency_rounded <- round(greek_inscriptions_w_occupations_in_provinces_counts_df$frequency)
 ```
 
-
-
-
-
 Remark that all the values that will follow in this section will be estimates and not real count.
 For that, we would need an in-depth analysis of Greek inscriptions that is beyond the scope of this study. 
 
@@ -1878,51 +1874,285 @@ occupations_counts_Latin_Greek_comparison_country[is.na(occupations_counts_Latin
 Inspection of the above df reveals that some provinces (resp countries) have very few Latin inscriptions by a large number of Greek inscriptions. 
 To mitigate the issue, we draw not just from the distribution of occupations in a geographical unit but also from those of their surroundings (say less than 100km. This is an arbitrary threshold meant to reflect similar environmental and social conditions TO BE DEBATED). 
 
-Find surroundings of the provinces and countries
-
-ZIPPO
-```{r surroundings of provinces and countries TO DO}
+Find surroundings of the provinces and countries.
+```{r surroundings of provinces and countries}
 # compute the distances between provinces
 distance_between_provinces <- st_distance(provinces) 
-rownames(distance_between_provinces) <- provinces$province
-colnames(distance_between_provinces) <- provinces$province
+province_names <- provinces$province
+rownames(distance_between_provinces) <- province_names
+colnames(distance_between_provinces) <- province_names
 
 # distance between countries: note it include countries beyond the borders of the empire that include greek inscriptions
-countries_in_area <- world_sf[world_sf$iso3 %in% occupations_in_greek_inscriptions_by_country_counts_df$country,]
-distance_between_countries <- st_distance(countries_in_area,countries_in_area)
-rownames(distance_between_countries) <- countries_in_area$iso3
-colnames(distance_between_countries) <- countries_in_area$iso3
+selected_countries <- world_sf[world_sf$iso3 %in% occupations_in_greek_inscriptions_by_country_counts_df$country,] 
+selected_countries <- selected_countries[,c("iso3","geometry")]
 
-#THERE ARE SOME ISSUES HERE WITH PSE
+# "PSE" (Palestine) appears twice (one territory corresponds to the West Bank and the other to the Gaza Strip). We combine them as one geometric object to avoid repeated rows and columns in the distance table. 
+selected_countries$geometry[selected_countries$iso3 == "PSE"] <- st_union(
+  na.omit(selected_countries[selected_countries$iso3=="PSE",]))
+selected_countries <- unique(selected_countries)
 
-# note that PSE needs to be dealt specially because there are two polygon structures
+# now compute the distances between the selected countries
+distance_between_countries <- st_distance(selected_countries)
+selected_country_codes <- selected_countries$iso3
+rownames(distance_between_countries) <- selected_country_codes
+colnames(distance_between_countries) <- selected_country_codes
 
+# set maximum distance to include in the surroundings
+max_distance <- set_units(100000,"m")
+
+# initialise empty list of surroundings for provinces
+surrounding_list_provinces <- list()
+
+# for each province, add an entry to the list with its surroundings
+for (province in province_names){
+  surrounding_list_provinces[[province]] <- province_names[which(distance_between_provinces[province,]<max_distance)]
+}
+
+# inialise empty list of surrroundings for countries
+surrounding_list_countries <- list()
+
+# for each country, add an entry to the list with its surroundings
+for (country in selected_country_codes){
+  surrounding_list_countries[[country]] <- selected_country_codes[which(distance_between_countries[country,]<max_distance)]
+}
+```
+
+Find table of occupations for geographical unit plus its surroundings.
+```{r table of occupations in surroundings}
+# initialise table for provinces
+province_and_surroundings_table <- province_table
+
+# add together the table values 
+# rk : we cannot substitute rownames(province_table) with province_names as not all provinces contained inscriptions (Alpes Poeninae does not)
+for (province in rownames(province_table)) {
+  province_and_surroundings_table[province,] <- province_table[rownames(province_table) %in% surrounding_list_provinces[[province]],] %>%
+    colSums()
+}
+
+# initialise table for provinces
+country_and_surroundings_table <- country_table
+
+# add together the table values 
+# rk : we cannot substitute rownames(province_table) with province_names as not all provinces contained inscriptions (Alpes Poeninae does not)
+for (country in rownames(country_table)) {
+  country_and_surroundings_table[country,] <- country_table[rownames(country_table) %in% surrounding_list_countries[[country]],] %>%
+    colSums()
+}
+```
+
+Now that we have the distribution, we want to sample with replacement from this set with sample size equal to the estimated number of occupation-related Greek inscriptions. This will give us an estimated distribution of occupations deriving from the Greek inscriptions
+
+```{r sample occupations from provinces and surroundings}
+#initialise the list
+province_table_greek_list <- list()
+
+# for reproducibility
+set.seed(1)
+
+for (i in 1:n_iterations) {
+  #initialise table
+  province_table_greek <- province_table
+  province_table_greek[,] <- 0
+  
+  # build
+  for (province in rownames(province_table)) {
+    if (province %in% occupations_in_greek_inscriptions_by_province_counts_df$province){
+      # extract the info for a province
+      province_counts <- province_and_surroundings_table[province,]
+      # convert into a distribution of occupations. Each occupation appears as many times as the province 
+      province_distribution <- rep(names(province_counts),province_counts)
+      # sample
+      occupations_sample <- sample(
+        province_distribution,
+        size = occupations_in_greek_inscriptions_by_province_counts_df[province,i+1],
+        replace = TRUE
+      )
+    
+      # as table
+      occupations_sample_table <- table(occupations_sample)
+    
+      # add to the table
+      province_table_greek[province,names(occupations_sample_table)] <- occupations_sample_table
+    }
+  }
+  
+  # add to the list
+  province_table_greek_list[[paste0("it_",i)]] <- province_table_greek
+  
+  # check progression
+  if (i %%100 ==0){
+    print(paste(i,"iterations out of",n_iterations,"completed."))
+  }
+}
+```
+
+Repeat the same for countries
+```{r sample occupations from countries and surroundings}
+#initialise the list
+country_table_greek_list <- list()
+
+# for reproducibility
+set.seed(1)
+
+for (i in 1:n_iterations) {
+  #initialise table
+  country_table_greek <- country_table
+  country_table_greek[,] <- 0
+  
+  # build
+  for (country in rownames(country_table)) {
+    if (country %in% occupations_in_greek_inscriptions_by_country_counts_df$country){
+      # extract the info for a country
+      country_counts <- country_and_surroundings_table[country,]
+      # convert into a distribution of occupations. Each occupation appears as many times as the country 
+      country_distribution <- rep(names(country_counts),country_counts)
+      # sample
+      occupations_sample <- sample(
+        country_distribution,
+        size = occupations_in_greek_inscriptions_by_country_counts_df[country,i+1],
+        replace = TRUE
+      )
+    
+      # as table
+      occupations_sample_table <- table(occupations_sample)
+    
+      # add to the table
+      country_table_greek[country,names(occupations_sample_table)] <- occupations_sample_table
+    }
+  }
+  
+  # add to the list
+  country_table_greek_list[[paste0("it_",i)]] <- country_table_greek
+  
+  # check progression
+  if (i %%100 ==0){
+    print(paste(i,"iterations out of",n_iterations,"completed."))
+  }
+}
+```
+
+We convert the data into dataframes and save it.
+```{r convert province lists to df}
+# Convert each table to a long format data frame
+province_table_greek_long <- lapply(province_table_greek_list, function(tbl) {
+  data.frame(row = rep(rownames(tbl), times = ncol(tbl)),
+             col = rep(colnames(tbl), each = nrow(tbl)),
+             freq = as.vector(tbl))})
+
+# Name each frequency column uniquely
+for (i in seq_along(province_table_greek_long)) {
+  names(province_table_greek_long[[i]])[3] <- paste0("freq_", i)
+}
+
+# Merge all long format tables into a single data frame by row and col
+province_table_greek_long_df <- Reduce(function(x, y) merge(x, y, by = c("row", "col")), province_table_greek_long)
+
+# write results
+write.csv(province_table_greek_long_df,
+          "../../results/economic_complexity/greek_occupations_by_province.csv")
+```
+
+Do the same for countries
+```{r convert country list to df}
+# Convert each table to a long format data frame
+country_table_greek_long <- lapply(country_table_greek_list, function(tbl) {
+  data.frame(row = rep(rownames(tbl), times = ncol(tbl)),
+             col = rep(colnames(tbl), each = nrow(tbl)),
+             freq = as.vector(tbl))})
+
+# Name each frequency column uniquely
+for (i in seq_along(country_table_greek_long)) {
+  names(country_table_greek_long[[i]])[3] <- paste0("freq_", i)
+}
+
+# Merge all long format tables into a single data frame by row and col
+country_table_greek_long_df <- Reduce(function(x, y) merge(x, y, by = c("row", "col")), country_table_greek_long)
+
+# write results
+write.csv(country_table_greek_long_df,
+          "../../results/economic_complexity/greek_occupations_by_country.csv")
 ```
 
 
+Finally we add the tables of greek and latin inscriptions together to obtain the result 
+```{r add the tables}
+# provinces
+province_table_greek_latin_list<-list()
+for(i in 1:n_iterations){
+  # sum
+  province_table_greek_latin <- province_table_greek_list[[paste0("it_",i)]] + province_table
+  
+  # sort
+  # col names (occupations, sorted by frequency)
+  col_names_p_gl <- names(
+    sort(
+      colSums(province_table_greek_latin),
+      decreasing=TRUE)
+    )
+  
+  # row names (countries, sorted by total counts)
+  row_names_p_gl <- names(
+    sort(
+      rowSums(province_table_greek_latin),
+      decreasing=TRUE)
+    )
+  
+  # sort based on row and column counts
+  province_table_greek_latin <- province_table_greek_latin[row_names_p_gl,col_names_p_gl]
 
+  # add to list
+  province_table_greek_latin_list[[paste0("it_",i)]] <- province_table_greek_latin 
+}
 
+# countries
+country_table_greek_latin_list<-list()
+for(i in 1:n_iterations){
+  # sum
+  country_table_greek_latin <- country_table_greek_list[[paste0("it_",i)]] + country_table
+  
+  # sort
+  # col names (occupations, sorted by frequency)
+  col_names_c_gl <- names(
+    sort(
+      colSums(country_table_greek_latin),
+      decreasing=TRUE)
+    )
+  
+  # row names (countries, sorted by total counts)
+  row_names_c_gl <- names(
+    sort(
+      rowSums(country_table_greek_latin),
+      decreasing=TRUE)
+    )
+  
+  # sort based on row and column counts
+  country_table_greek_latin <- country_table_greek_latin[row_names_c_gl,col_names_c_gl]
 
+  # add to list
+  country_table_greek_latin_list[[paste0("it_",i)]] <- country_table_greek_latin 
+}
 
-Define sample set
+```
 
-
-
+Example heat map
 ```{r}
-# for each province, sample with replacement from the sample set with sample size equal to the estimated number of occupation-related Greek inscriptions.
+province_latin_and_greek_table_heatmap <- as.data.frame(province_table_greek_latin_list[["it_1"]]) %>% setNames(c("province","occupation","frequency"))
+province_latin_and_greek_table_heatmap$log_frequency <- log(province_latin_and_greek_table_heatmap$frequency)
 
-sample(province_table,
-         size = round(sum(greek_inscriptions_w_occupations_in_countries_counts_df$frequency_rounded)),
-         replace = TRUE))
+province_latin_and_greek_table_heatmap_plot <- ggplot(province_latin_and_greek_table_heatmap, aes(occupation, province, fill=log_frequency)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(x = "occupation", 
+       y = "province", 
+       fill ="log(frequency)",
+       title = "Frequency of occupations in inscriptions by province") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
 
+print(province_latin_and_greek_table_heatmap_plot)
 ```
 
-
-
-
-
-
-NEED GREEK DATA
+One thing that looks odd to me is the fact that for the Greek-speaking regions we are sampling many times from a limited pool of occupations that lead to very concentrated distribution of job types. This diminishes the "lower triangularity" of the matrix. We might have to expand the pool to the entire system. This can be done by adjusting the threshold :)
 
 ## Specialisation function for updates TO DO NOT PRIORITY
 We create a function to subdivide an occupation into suboccupations as new evidence is gathered
