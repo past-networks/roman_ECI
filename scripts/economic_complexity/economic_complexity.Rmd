@@ -1642,15 +1642,165 @@ write.csv(ratio_epitaphs_pop_provinces,
           "../../results/economic_complexity/ratio_epitaphs_pop_provinces.csv")
 ```
 
-### Occupation TO DO
-Add farmers (proportionally to total population. Why?)
-```{r find villas from Pleiades dataset}
-pleiades <- st_read("C:/Users/au732923/OneDrive - Aarhus Universitet/Desktop/Minerva/data/ancient_sites_pleiades/pleiades_sett_vil_st_fort_clean.shp")
+### Farmers OK
+The Roman Empire was primarily a rural society.
+Our above estimates indicate that the rural population would have comprised roughly between 84% and 86% of the total population, though this varies widely among regions.
+Most of these people would have been involved in agriculture, but evidence of farming as an occupation in inscriptions is extremely scarce (only 7 references in the whole empire).
 
-villas <- pleiades[str_detect(pleiades$featureTyp,"villa"),]
+We conclude our attempt to reduce bias in the tables by inflating the count of the generic profession of farmer (agricola).
+We assume for simplicity that generic agricolae and other food-production-related occupations would involve a proportion of the total occupations roughly similar to that of the rural population.
+(Rk: in practice there would be a certain proportion of rural population not involved in agriculture and a certain proportion of urban population involved in it. For now we make the simplifying assumption that these would roughly cancel each other off).
+
+Let "a" be the number of "agricola"
+Let "f" be the count of people involved in other "food-production" activities (based on Harris category).
+Let "d" be the sum of all occupations different from food production.
+Let "r" be the proportion rural population in a geographical unit.
+Let "p" be a parameter, with p very close to 1.
+
+Then the above assumption translates into the following simple equation: a+f = pr(a+f+d),
+which yields a = dpr/(1-pr)-f.
+RK: when p=1, 1-pr=u, where u is the urban population, so a=dr/u-f
+
+```{r function to expand the count of "agricola" in the table}
+all_food_prod_occs <- occupations_status$std_spelling[occupations_status$Harris_Category=="Food-Production"]
+other_food_prof_occ <- all_food_prod_occs[!all_food_prod_occs=="agricola"]
+non_food_prod_occ <- occupations_status$std_spelling[!occupations_status$std_spelling %in% all_food_prod_occs]
+
+# need to eliminate eastern and north eastern border from the computation
+#a<-a[!rownames(a)%in%c("Eastern border","North-eastern border"),]
+
+# ensure parameter p is always slightly below 1 (otherwise divide by inf, but it makes sense logically)
+agricola_correction <- function(occupation_table, p){
+  # find names of geographical units
+  gu <- rownames(occupation_table)
+  
+  # initialise the outputs: two output tables, one with the minimum and one with the maximum estimates
+  output_table_min <- occupation_table
+  output_table_max <- occupation_table
+  
+  # define the equation variables
+  f <- rowSums(occupation_table[,other_food_prof_occ])
+  d <- rowSums(occupation_table[,non_food_prod_occ])
+  
+  # info on population
+  pop <- provinces_population_df
+  rownames(pop) <- provinces_population_df$province
+  pop <- pop[gu,]
+  
+  r_min <- pop[gu,"rural_pop_min"]/pop[gu,"tot_pop_min"]
+  r_max <- pop[gu,"rural_pop_max"]/pop[gu,"tot_pop_max"]
+  a_min <- apply(cbind(d*p*r_min/(1-p*r_min)-f,occupation_table[,"agricola"]),1,max) # to ensure that we do not go below what is recorded
+  a_max <- apply(cbind(d*p*r_max/(1-p*r_max)-f,occupation_table[,"agricola"]),1,max) # to ensure that we do not go below what is recorded
+
+  # update tables
+  output_table_min[,"agricola"] <- a_min
+  output_table_max[,"agricola"] <- a_max
+  
+  # sort
+  # col names (occupations, sorted by frequency)
+  col_names_min <- names(
+    sort(
+      colSums(output_table_min),
+      decreasing=TRUE)
+    )
+   col_names_max <- names(
+    sort(
+      colSums(output_table_max),
+      decreasing=TRUE)
+    )
+  # row names (geographical units, sorted by total counts)
+  row_names_min <- names(
+    sort(
+      rowSums(output_table_min),
+      decreasing=TRUE)
+    )
+   row_names_max <- names(
+    sort(
+      rowSums(output_table_max),
+      decreasing=TRUE)
+    )
+   # apply sorting
+  output_table_min <- output_table_min[row_names_min,col_names_min]
+  output_table_max <- output_table_max[row_names_max,col_names_max]
+
+  #output as list
+  output_table_list = list(min = output_table_min, 
+                           max = output_table_max)
+}
 ```
 
-### Language TO DO
+### Social status
+#### Summary
+Roughly speaking, higher status people tend to be over-represented compared to lower status people in inscriptions.
+As certain occupations were primarily performed by people of high or low status, the disparity in representation affects occupation counts.
+In this section, we propose a simple (and improvable) mechanism to address this bias.
+
+Among all inscriptions with occupations, we select those included in EDH and that thus contain references to people. 
+Among these, we focus on those that contain references to the people's status. 
+We distinguish people into two broad categories: elites and non-elite people, 
+where by elites we mean people who status is included in c("equestrian order", "decurial order, higher local offices", "senatorial order", "equestrian order", "military personnel", "lower local offices, administration of imperial estates", "emperor / imperial household", "rulers (foreign)"), and by non-elites we mean people whose status in included in c("freedmen / freedwomen", "slaves", "Augustales").
+Among inscriptions which contain references to occupations,  we find 7358 references to elite people,	1258 references to non-elites, thus yielding a ratio of approximately 5.85 elite people per non-elite person, which is highly unrealistic. (NEED TO CLARIFY THIS)
+Note however that most inscriptions with occupations contain no reference to status.
+
+Each occupation is classified in one of nineteen Harris Categories.
+For each Harris Category, we count the co-occurrence of of references to elite/non-elite statuses with occupations in that category.
+(Rk: At the moment we are only looking at co-occurrence, and thus we do not have a mechanism to check whether the person whose status is mentioned is also the person who performs a given occupation. This can lead to wrong associations, e.g., "Senator X hires a cook" would associate senator and cook, and thus necessitates a more careful assessment of the source material in the future.)
+We then compute how commonly elite/on-elite people were employed in a given category (e.g., 10% of non-elite people were employed in clothing-related occupations, but only 1% of elite people were). 
+This allows us to determine whether a category was mostly an elite or non-elite one.
+
+We use this information to inflate the counts of occupations in categories dominated by non-elites by a fixed factor, which we arbitrarily fix as between 1 (no inflation) and 5 times with a mean of 3.
+Rk: These factors are arbitrary because we do no know exactly how many people were elite or non-elite in Ancient Rome, with estimates of 10000 senators and equites and 200-400k military personnel in a total of 60 million people cited by Wikipedia, which would imply that a huge corrective factor is needed.
+A more careful approach would involve assuming simplistically that if one had status, then they would include it in the inscriptions, and thus assuing that those who did not indicate their status were probably non-elites. This would be roughly 3/4 of the total.
+
+#### Implementation
+```{r status and occupations}
+# assign status to each Harris category
+Harris_category_status <- data.frame(
+  Harris_Category = sort(unique(occupations_all$Harris_Category)),
+  elite = c(TRUE,FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,TRUE,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,TRUE,TRUE,TRUE)) #Rk: it contain "Unclassfied" (sic) as category
+
+# for each occupation, classify it as either elite or non elite
+occupations_status <- occupations_all[,c("std_spelling","Harris_Category")] %>% 
+  unique() %>%
+  left_join(Harris_category_status)
+
+# select only occupations actually in the data
+occupations_status <- occupations_status[occupations_status$std_spelling %in% col_names_c,]
+non_elite_occupations <- occupations_status$std_spelling[!occupations_status$elite]
+```
+
+```{r function to inflate a table by a given value}
+status_bias_correction <- function(occupation_table, corrective_factor){
+  output_table <- occupation_table
+  output_table[,non_elite_occupations] <-  output_table[,non_elite_occupations] *corrective_factor
+  return(output_table)
+}
+```
+
+```{r sample the correcive factor from a certain interval and output several examples of corrections}
+status_bias_correction_stochastic <- function(occupation_table, cf_min, cf_max, n_samples){
+  # initialise empty list
+  output_table_list <- list()
+  
+  # set for reproducibility
+  set.seed(123)
+  
+  # sample corrective factors from triangular distribution
+  corrective_factors <- rtri(n = n_samples,
+                       min = cf_min,
+                       max = cf_max,
+                       mode = (cf_min+cf_max)/2)
+  
+  # fill list with each corrective factor
+  for (i in 1:n_samples){
+    output_table_list[[i]] <- status_bias_correction(occupation_table,corrective_factors[i])
+  }
+  
+  return(output_table_list)
+}
+```
+
+### Language OK
 Many inscriptions found within the limits of the Roman Empire were written in Greek. These were primarily concentrated in the Eastern Roman Empire. We need to account for them to avoid language bias.
 
 In this section we use the counts of greek inscriptions by geographical units that were computed in the previous sections.
@@ -1692,8 +1842,7 @@ greek_inscriptions_w_occupations_in_provinces_counts_df$frequency_rounded <- rou
 Remark that all the values that will follow in this section will be estimates and not real count.
 For that, we would need an in-depth analysis of Greek inscriptions that is beyond the scope of this study. 
 
-Compute the average number of occupations on each occupation-related inscription from the Latin data set.
-Bonus: compute the distribution of the number of occupation-related inscriptions.
+Compute the distribution of the number of occupation-related inscriptions.
 Assign a count of occupations to each occupation-related inscription based on this distribution.
 ```{r}
 # set seed for reproducibility
@@ -2159,4 +2308,27 @@ We create a function to subdivide an occupation into suboccupations as new evide
 
 ## Apply bias correction TO DO (in different orders)
 
+### Attempt with province table.
+Order to follow:
+1. Language
+2. Research bias
+3. Status bias
+4. Gender
+5  Agricola
+
+```{r}
+# 1. Language
+# select one of the many precomputed ones:
+start_table <- province_table_greek_latin_list[[1]]
+
+# delete the border regions (WILL HAVE TO BE DONE FROM THE START LATER ON)
+start_table <- start_table[!rownames(start_table)%in%c("Eastern border","North-eastern border"),]
+
+```
+
+
+
+
+
 FILES TO USE: country_table, province_table, cities_table_list
+
