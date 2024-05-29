@@ -2316,19 +2316,91 @@ Order to follow:
 4. Gender
 5  Agricola
 
-```{r}
+#### 1. Language
+```{r 1. Language}
 # 1. Language
 # select one of the many precomputed ones:
-start_table <- province_table_greek_latin_list[[1]]
+start_table <- province_table[!rownames(start_table)%in%c("Eastern border","North-eastern border"),]
+
+table_step_1 <- province_table_greek_latin_list[[1]]
 
 # delete the border regions (WILL HAVE TO BE DONE FROM THE START LATER ON)
-start_table <- start_table[!rownames(start_table)%in%c("Eastern border","North-eastern border"),]
+table_step_1 <- table_step_1[!rownames(table_step_1)%in%c("Eastern border","North-eastern border"),]
+```
 
+#### 2. Research bias
+Repeat the same for provinces.
+```{r rescale by epitaph per person}
+# Latin epitaph counts by province 
+epitaphs_in_provinces_counts_2 <- epitaphs_in_provinces_counts
+rownames(epitaphs_in_provinces_counts_2) <- epitaphs_in_provinces_counts_2$province
+epitaphs_in_provinces_counts_2<-epitaphs_in_provinces_counts_2[rownames(table_step_1),]
+colnames(epitaphs_in_provinces_counts_2) <- c("province","latin_epitaphs")
+
+# count of greek inscriptions (include also those with 0)
+greek_inscriptions_in_provinces_counts_df_2 <- greek_inscriptions_in_provinces_counts_df 
+greek_inscriptions_in_provinces_counts_df_2 <- rbind(greek_inscriptions_in_provinces_counts_df_2,
+                                                     data.frame(province = c("Alpes Maritimae","Alpes Graiae"), 
+                                                                frequency = c(0,0)))
+rownames(greek_inscriptions_in_provinces_counts_df_2) <- greek_inscriptions_in_provinces_counts_df_2$province
+greek_inscriptions_in_provinces_counts_df_2 <- greek_inscriptions_in_provinces_counts_df_2[rownames(table_step_1),]
+
+# count total inscriptions and ratio of assume same ratio of funerary ones
+epitaphs_in_provinces_counts_2$greek_epitaphs <- epitaphs_in_provinces_counts_2$latin_epitaphs*greek_inscriptions_in_provinces_counts_df_2$frequency/rowSums(start_table[rownames(table_step_1),])
+
+epitaphs_in_provinces_counts_2$epitaphs <- epitaphs_in_provinces_counts_2$latin_epitaphs+epitaphs_in_provinces_counts_2$greek_epitaphs
+
+# initialise data frame of bias 
+ratio_epitaphs_pop_provinces_2 <- data.frame(
+  province = rownames(table_step_1)) %>% 
+  left_join(provinces_population_df[,c("province","tot_pop_min","tot_pop_max")]) %>%
+  left_join(epitaphs_in_provinces_counts_2)
+
+# add columns of ratios between population estimates and epitaphs counts
+ratio_epitaphs_pop_provinces_2$people_per_epitaph_min <- ratio_epitaphs_pop_provinces_2$tot_pop_min/ratio_epitaphs_pop_provinces_2$epitaphs
+ratio_epitaphs_pop_provinces_2$people_per_epitaph_max <- ratio_epitaphs_pop_provinces_2$tot_pop_max/ratio_epitaphs_pop_provinces_2$epitaphs
+
+rownames(ratio_epitaphs_pop_provinces_2) <- ratio_epitaphs_pop_provinces_2$province
+
+# sort info
+ratio_epitaphs_pop_provinces_2<-ratio_epitaphs_pop_provinces_2[rownames(table_step_1),]
+
+# rescale by minimum people per epitaph
+table_step_2_min <- table_step_1*ratio_epitaphs_pop_provinces_2$people_per_epitaph_min
+```
+
+#### 3. Status bias
+```{r}
+table_step_3_min <- status_bias_correction_stochastic(table_step_2_min,3,5,1)[[1]]
 ```
 
 
+#### 4. Gender
 
+```{r}
+table_step_4_min <-  gender_bias(table_step_3_min,gender_ratio_v[1])
+```
 
+#### 5. Agricola
+```{r}
+table_step_5_min <- agricola_correction(table_step_4_min,0.95)$min
 
-FILES TO USE: country_table, province_table, cities_table_list
+```
+
+```{r}
+table_step_5_min_heatmap <- as.data.frame(table_step_5_min) %>% setNames(c("province","occupation","frequency"))
+table_step_5_min_heatmap$log_frequency <- log(table_step_5_min_heatmap$frequency)
+
+table_step_5_min_heatmap_plot <- ggplot(table_step_5_min_heatmap, aes(occupation, province, fill=log_frequency)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(x = "occupation", 
+       y = "province", 
+       fill ="log(frequency)",
+       title = "Frequency of occupations in inscriptions by province") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
+
+print(table_step_5_min_heatmap_plot)
+```
 
