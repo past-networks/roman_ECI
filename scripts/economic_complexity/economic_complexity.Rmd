@@ -1118,20 +1118,29 @@ gender_bias <- function(table, bias){
 ### Research bias ONGOING
 #### Estimate population by geographical unit
 ##### Notes on population estimation
-To establish which geographical areas are overrepresented in inscriptions, we can use the ratio between funerary inscriptions and population, the assumption being that deaths happen (theoretically) proportionally to the population.
+To establish which geographical units are overrepresented in inscriptions, we can use the ratio between funerary inscriptions and the total number of people who lived/died in that geographical unit while it was part of the Roman Empire. 
+The assumption is that deaths happen (theoretically) proportionally to the population.
 
-To do this, we need to estimate the total population residing in each geographical unit.  
+To do this, we need to estimate the total population residing in each geographical unit and how it changed in time.
+Doing this carefully would require much more information than what is available. 
+What we present here a simplified approach that is only based on peak population estimates available from the literature.
 
 As far as we know, there are no estimates of the Ancient Roman population at the provincial level (and certainly not within the borders of modern nations or town hinterlands).
+Instead, a set of estimates exist for the population in 10 macroregions of the Empire (Table 3.1 in "Scheidel W. Demography. In: Scheidel W, Morris I, Saller RP, eds. The Cambridge Economic History of the Greco-Roman World. Cambridge University Press; 2007:38-86") and for the population of individual urban units (Hanson).
 
-Instead, a set of estimates exist for the total population in 10 macroregions of the Empire (Table 3.1 in "Scheidel W. Demography. In: Scheidel W, Morris I, Saller RP, eds. The Cambridge Economic History of the Greco-Roman World. Cambridge University Press; 2007:38-86") and for the population of individual urban units (Hanson).
-
-For each macroregion, we compute the urban population by summing the population estimates of all the urban areas falling within it.
+For each macroregion, we compute the (peak) urban population by summing the population estimates of all the urban areas falling within it.
 We subtract the urban population to obtain an estimate of the rural population in the macroregion. 
 
 To each province in the macroregion, we find the urban population by summing the population estimates of the urban areas falling within it. We find the rural population by taking a part of the rural population of the macroregion, proportionate to the area of the province.
-
 Note that this is the same as assuming that the rural population density is approximately constant within a macroregion. This is a crude assumption, but the most natural one that can be made with limited data and without additional population models. In the future, it can be improved by integrating additional information (e.g., terrain and suitability to agriculture).
+
+To estimate population in each year before and after the peak assume naively a constant annual population growth/decline rate r. We take r distributed according to a triangular distribution between 0 and 0.5%, with a peak at 0.15%, following Hanson's estimates for urban population (Hanson, J., 2021. New approaches to the urban population and urbanization rate of the Roman Empire, AD 1 to 200.). We compute the 
+
+
+
+
+
+RK: This is a very simplified method.
 
 ##### Provinces
 First, associate each province to the macroregion mentioned by Scheidel.
@@ -1574,6 +1583,77 @@ countries_population_df <-  intersections_pop_full_info_df %>%
 #write.csv(intersections_pop_full_info_df,
 #          "../../results/economic_complexity/intersections_population_full_info.csv")
 ```
+
+##### Total number of deaths in each province
+The above population estimates for the geographical units refer to peak population. We now use them to estimate how many people have died whilst the province was part of the Roman empire
+```{r construct total population estimates for each province}
+# read csv with info on when provinces were conquered/lost
+province_dates_df <- read.csv("../../data/economic_complexity/province_dates.csv",sep=";")
+
+# order alphabetically
+provinces_population_df <- provinces_population_df[order(provinces_population_df$province),]
+province_dates_df <- province_dates_df[order(province_dates_df$province),]
+
+# build data.frame of population multipliers
+n_iter <- 1000
+years <- c(min(province_dates_df$start_date):-1,1:max(province_dates_df$end_date))
+n_years <- abs(min(province_dates_df$start_date)) + max(province_dates_df$end_date)
+
+# extract the growth rates from a triangular distribution 
+growth_rate_samples <- rtri(n_iter,min=0,max=0.005,mode=0.0015)
+
+# define the population functions
+integrand_to_165AD <- function(x){(1-r)^(165-x)}
+integrand_from_165AD <- function(x){(1-r)^(x-165)}
+
+# initialise population results
+provinces_total_population_df <- data.frame(
+  iter = rep(1:n_iter, each = nrow(provinces_population_df)),
+  province = rep(provinces_population_df$province,n_iter),
+  urb_pop_grand_total = 0,
+  rural_pop_min_grand_total = 0,
+  rural_pop_max_grand_total = 0,
+  tot_pop_min_grand_total = 0,
+  tot_pop_max_grand_total = 0)
+
+for (i in 1:n_iter) {
+  r <- growth_rate_samples[i]
+  for (j in 1:nrow(province_dates_df)){
+    # find the start and end date of each province (THIS SHOULD BE DONE WITH VECTORS IN THE FUTURE)
+    start_date <- province_dates_df$start_date[j]
+    end_date <- province_dates_df$end_date[j]
+    
+    # find integral
+    integral_to_165AD <- integrate(integrand_to_165AD,start_date,min(end_date,165))
+    integral_from_165AD <- integrate(integrand_to_165AD,max(start_date,165),end_date)
+    integral_total <- integral_to_165AD$value + integral_from_165AD$value
+
+    # add values to df
+    provinces_total_population_df[(i-1)*nrow(provinces_population_df)+j,
+                                  c("urb_pop_grand_total",
+                                    "rural_pop_min_grand_total",
+                                    "rural_pop_max_grand_total",
+                                    "tot_pop_min_grand_total",
+                                    "tot_pop_max_grand_total")] <-
+      integral_total*provinces_population_df[j,c("urban_pop","rural_pop_min","rural_pop_max","tot_pop_min","tot_pop_max")]
+  }
+  print(i)
+}
+
+# 
+r <- 0.0015
+
+
+```
+
+
+
+
+
+We use them to construct estimates of how many peopleyears 
+```{r}
+```
+
 
 #### Ratios population/epitaph TO REDO WITH UPDATED COUNTS GIVEN THE LANGUAGE
 First, compute the ratios of the people per epitaph
@@ -2320,7 +2400,7 @@ Order to follow:
 ```{r 1. Language}
 # 1. Language
 # select one of the many precomputed ones:
-start_table <- province_table[!rownames(start_table)%in%c("Eastern border","North-eastern border"),]
+start_table <- province_table[!rownames(province_table)%in%c("Eastern border","North-eastern border"),]
 
 table_step_1 <- province_table_greek_latin_list[[1]]
 
@@ -2384,8 +2464,28 @@ table_step_4_min <-  gender_bias(table_step_3_min,gender_ratio_v[1])
 #### 5. Agricola
 ```{r}
 table_step_5_min <- agricola_correction(table_step_4_min,0.95)$min
+write.csv(table_step_5_min,"../../results/economic_complexity/table_step_5_min.csv")
 
+write.csv(start_table,"../../results/economic_complexity/start_table.csv")
 ```
+
+```{r}
+start_table_heatmap <- as.data.frame(start_table) %>% setNames(c("province","occupation","frequency"))
+start_table_heatmap$log_frequency <- log(start_table_heatmap$frequency)
+
+start_table_heatmap_plot <- ggplot(start_table_heatmap, aes(occupation, province, fill=log_frequency)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(x = "occupation", 
+       y = "province", 
+       fill ="log(frequency)",
+       title = "Frequency of occupations in inscriptions by province") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
+
+print(start_table_heatmap_plot)
+```
+
 
 ```{r}
 table_step_5_min_heatmap <- as.data.frame(table_step_5_min) %>% setNames(c("province","occupation","frequency"))
@@ -2402,5 +2502,17 @@ table_step_5_min_heatmap_plot <- ggplot(table_step_5_min_heatmap, aes(occupation
   theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
 
 print(table_step_5_min_heatmap_plot)
+```
+
+```{r}
+a <- numeric(54)
+for (i in 1:54){
+  a[i] <- which(rownames(table_step_5_min)==rownames(start_table)[i])
+}
+
+change_in_rank_df <- data.frame(province = rownames(table_step_5_min),
+                                new_rank = a,
+                                old_rank = 1:54,
+                                change_in_rank = a-1:54)
 ```
 
