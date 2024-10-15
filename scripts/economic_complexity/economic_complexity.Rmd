@@ -1640,20 +1640,9 @@ for (i in 1:n_iter) {
   print(i)
 }
 
-# 
-r <- 0.0015
-
-
+# save results
+write.csv(provinces_total_population_df,"../../results/economic_complexity/provinces_total_population.csv")
 ```
-
-
-
-
-
-We use them to construct estimates of how many peopleyears 
-```{r}
-```
-
 
 #### Ratios population/epitaph TO REDO WITH UPDATED COUNTS GIVEN THE LANGUAGE
 First, compute the ratios of the people per epitaph
@@ -2430,28 +2419,36 @@ epitaphs_in_provinces_counts_2$greek_epitaphs <- epitaphs_in_provinces_counts_2$
 
 epitaphs_in_provinces_counts_2$epitaphs <- epitaphs_in_provinces_counts_2$latin_epitaphs+epitaphs_in_provinces_counts_2$greek_epitaphs
 
+# extract population with iteration 1
+provinces_total_population_it1_df <- provinces_total_population_df[provinces_total_population_df$iter==1,]
+
 # initialise data frame of bias 
 ratio_epitaphs_pop_provinces_2 <- data.frame(
   province = rownames(table_step_1)) %>% 
-  left_join(provinces_population_df[,c("province","tot_pop_min","tot_pop_max")]) %>%
+  left_join(provinces_total_population_it1_df[,c("province","urb_pop_grand_total","tot_pop_min_grand_total","tot_pop_max_grand_total")]) %>%
   left_join(epitaphs_in_provinces_counts_2)
 
 # add columns of ratios between population estimates and epitaphs counts
-ratio_epitaphs_pop_provinces_2$people_per_epitaph_min <- ratio_epitaphs_pop_provinces_2$tot_pop_min/ratio_epitaphs_pop_provinces_2$epitaphs
-ratio_epitaphs_pop_provinces_2$people_per_epitaph_max <- ratio_epitaphs_pop_provinces_2$tot_pop_max/ratio_epitaphs_pop_provinces_2$epitaphs
+ratio_epitaphs_pop_provinces_2$people_per_epitaph_min <- ratio_epitaphs_pop_provinces_2$tot_pop_min_grand_total/(30*ratio_epitaphs_pop_provinces_2$epitaphs)
+ratio_epitaphs_pop_provinces_2$people_per_epitaph_max <- ratio_epitaphs_pop_provinces_2$tot_pop_max_grand_total/(30*ratio_epitaphs_pop_provinces_2$epitaphs)
+ratio_epitaphs_pop_provinces_2$people_per_epitaph_urban <- ratio_epitaphs_pop_provinces_2$urb_pop_grand_total/(30*ratio_epitaphs_pop_provinces_2$epitaphs)
 
 rownames(ratio_epitaphs_pop_provinces_2) <- ratio_epitaphs_pop_provinces_2$province
 
 # sort info
 ratio_epitaphs_pop_provinces_2<-ratio_epitaphs_pop_provinces_2[rownames(table_step_1),]
 
-# rescale by minimum people per epitaph
+# rescale by min people per epitaph
 table_step_2_min <- table_step_1*ratio_epitaphs_pop_provinces_2$people_per_epitaph_min
+# rescale by urban people per epitaph (we do not want to delete, we just want to add)
+table_step_2_urban <- table_step_1*sapply(ratio_epitaphs_pop_provinces_2$people_per_epitaph_urban,max,1)
+
 ```
 
 #### 3. Status bias
 ```{r}
-table_step_3_min <- status_bias_correction_stochastic(table_step_2_min,3,5,1)[[1]]
+table_step_3_min <- status_bias_correction_stochastic(table_step_2_urban,3,5,1)[[1]]
+#table_step_3_min <- status_bias_correction_stochastic(table_step_1,3,5,1)[[1]]
 ```
 
 
@@ -2464,9 +2461,9 @@ table_step_4_min <-  gender_bias(table_step_3_min,gender_ratio_v[1])
 #### 5. Agricola
 ```{r}
 table_step_5_min <- agricola_correction(table_step_4_min,0.95)$min
-write.csv(table_step_5_min,"../../results/economic_complexity/table_step_5_min.csv")
+#write.csv(table_step_5_min,"../../results/economic_complexity/table_step_5_min.csv")
 
-write.csv(start_table,"../../results/economic_complexity/start_table.csv")
+#write.csv(start_table,"../../results/economic_complexity/start_table.csv")
 ```
 
 ```{r}
@@ -2507,12 +2504,12 @@ print(table_step_5_min_heatmap_plot)
 ```{r}
 a <- numeric(54)
 for (i in 1:54){
-  a[i] <- which(rownames(table_step_5_min)==rownames(start_table)[i])
+  a[i] <- which(rownames(start_table)==rownames(table_step_5_min)[i])
 }
 
 change_in_rank_df <- data.frame(province = rownames(table_step_5_min),
-                                new_rank = a,
-                                old_rank = 1:54,
+                                old_rank = a,
+                                new_rank = 1:54,
                                 change_in_rank = a-1:54)
 ```
 
