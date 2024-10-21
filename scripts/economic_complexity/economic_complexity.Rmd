@@ -23,7 +23,7 @@ The document is structured as follows:
 * Create the tables of occupational counts per geographical units.
 * Deal with the uncertainty and biases in the datasets.
 
-# Preliminaries
+# Preliminaries ----------------------------------------------------------------
 ## Packages
 The following libraries are required.
 ```{r List required packages}
@@ -35,7 +35,8 @@ required_packages <- c("jsonlite",     # read json files
                        "raster",       # handle spatial files
                        "units",        # add physical units for geographic comparison
                        "ggspatial",    # additional plot features for spatial data
-                       "triangulr")    # triangular distribution 
+                       "triangulr",    # triangular distribution 
+                       "Matrix")       # for eigenvalues
 ```
 
 One needs to install them if they have not been installed yet.
@@ -59,6 +60,7 @@ Note that we use the following versions of the packages:
 * units       : 0.8.2
 * ggspatial   : 1.1.9
 * triangulr   : 1.2.1
+* Matrix      : 1.6.1
 
 These were loaded in the R version 4.3.0.
 
@@ -93,12 +95,13 @@ Note, however, that these older versions of the packages may not be available fo
 # install_version("units", version = "0.8.2")
 # install_version("ggspatial", version = "1.1.9")
 # install_version("triangulr", version = "1.2.1")
+# install_version("Matrix", version = "1.6.1")
 # 
 # #load packages
 # invisible(lapply(required_packages, library, character.only = TRUE))
 ```
 
-## Data TO MODIFY WITH CORRECT PATHS
+## Load Data TO MODIFY WITH CORRECT PATHS
 CREATE A NEW DIRECTORY
 DOWNLOAD FILES IN IT TO DO
 
@@ -135,7 +138,7 @@ provinces <- st_transform(provinces, crs=crs("epsg:4326"))
 provinces <- provinces[!provinces$province=="Roma",]
 ## delete unnecessary columns for our scopes
 provinces <- provinces[,c("province","geometry")]
-
+D
 # country borders
 ## read the data from local path. Need to download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp 
 world_sf <- read_sf('../../data/economic_complexity/world-administrative-boundaries/world-administrative-boundaries.shp') 
@@ -143,7 +146,11 @@ world_sf <- read_sf('../../data/economic_complexity/world-administrative-boundar
 world_no_borders_sf <- st_union(world_sf) 
 ```
 
-# Occupational units
+
+
+
+# Data preparation -------------------------------------------------------------
+## Occupational units
 First, select only the inscriptions containing information on occupations
 ```{r select inscriptions with occupations}
 inscriptions_w_occupations <- inscriptions[inscriptions$occups_N>0,]
@@ -222,8 +229,8 @@ unique_occupations_in_inscriptions_df <- data.frame(std_spelling = sort(unique(u
 
 ```
 
-# Geographical units
-## Intro
+## Geographical units
+### Intro
 Note that naive methods (e.g., using a cell raster) do not work, as each geographical unit must have at least one inscription and the data is very sparse.
 
 As a first step, convert the inscriptions into a sf
@@ -242,9 +249,14 @@ epitaphs_sf <- st_as_sf(epitaphs,
 greek_inscriptions_sf <- st_as_sf(na.omit(greek_inscriptions[,c("PHI_ID","Longitude","Latitude")]),
                                   coords = c("Longitude","Latitude"),
                                   crs = crs("epsg:4326"))
+
+# all Latin inscriptions
+inscriptions_sf <- st_as_sf(na.omit(inscriptions[,c("LIST-ID","Longitude","Latitude")]),
+                                  coords = c("Longitude","Latitude"),
+                                  crs = crs("epsg:4326"))
 ```
 
-## Modern countries
+### Modern countries
 ### Inscriptions with occupations
 First associate the inscriptions with occupations to the corresponding (closest) country
 ```{r inscriptions in countries}
@@ -358,6 +370,47 @@ print(epitaphs_by_country_plot)
 #ggsave("../../figures/economic_complexity/epitaphs_by_country.jpeg", epitaphs_by_country_plot, width = 7, height = 5.5, dpi = 300)
 ```
 
+### All Latin inscriptions TO CHECK
+We do the same for all the Latin inscriptions
+```{r epitaphs in countries}
+all_latin_inscriptions_coordinates <- data.frame(st_coordinates(inscriptions_sf)) %>% 
+  setNames(c("Longitude","Latitude"))
+
+all_latin_inscriptions_in_countries <- cbind(inscriptions_sf,
+                                   country = world_sf$iso3[st_nearest_feature(inscriptions_sf,world_sf)],
+                                   all_latin_inscriptions_coordinates)
+```
+Visual check 
+```{r map epitaphs by country}
+# base map
+all_latin_inscriptions_by_country_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = all_latin_inscriptions_in_countries,
+             aes(color = country)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(all_latin_inscriptions_coordinates$Longitude), 
+                    max(all_latin_inscriptions_coordinates$Longitude)), 
+           ylim = c(min(all_latin_inscriptions_coordinates$Latitude), 
+                    max(all_latin_inscriptions_coordinates$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(all_latin_inscriptions_by_country_plot)
+#ggsave("../../figures/economic_complexity/epitaphs_by_country.pdf", epitaphs_by_country_plot, width = 7, height = 5.5)
+#ggsave("../../figures/economic_complexity/epitaphs_by_country.jpeg", epitaphs_by_country_plot, width = 7, height = 5.5, dpi = 300)
+```
+
+
 ### Greek inscriptions
 Finally do the same with the Greek inscriptions.
 Associate Greek inscriptions to the closest country.
@@ -400,8 +453,8 @@ print(greek_inscriptions_by_country_plot)
 #ggsave("../../figures/economic_complexity/greek_inscriptions_by_country.jpeg", greek_inscriptions_by_country_plot, width = 7, height = 5.5, dpi = 300)
 ```
 
-## Roman provinces
-### Inscriptions with occupations
+### Roman provinces
+#### Inscriptions with occupations
 Repeat the same process using as geographical units the Roman provinces at Trajan's time.
 Note that province borders were constantly shifting, so this choice is in principle not more meaningful than using modern country borders.
 
@@ -520,9 +573,9 @@ print(inscriptions_by_province_plot)
 #ggsave("../../figures/economic_complexity/inscriptions_by_province.jpeg", inscriptions_by_province_plot, width = 15, height = 5.5, dpi = 300)
 ```
 
-### Epitaphs
+#### Epitaphs
 The same process is repeated for the epitaphs
-```{r}
+```{r epitaphs as sf}
 epitaphs_in_provinces <- st_join(epitaphs_sf, provinces)
 # remark: 15 inscriptions fall at the borders between two provinces. For the time being, we assign them at random (may look for the impact of this uncertainty later, but it's likely very small as the counts are large)
 epitaphs_in_provinces <- epitaphs_in_provinces[which(!duplicated(epitaphs_in_provinces$`LIST-ID`)),]
@@ -631,11 +684,10 @@ print(epitaphs_by_province_plot)
 #ggsave("../../figures/economic_complexity/epitaphs_by_province.jpeg", epitaphs_by_province_plot, width = 15, height = 5.5, dpi = 300)
 ```
 
-
-### Greek inscriptions
+#### Greek inscriptions
 The same process is repeated also for the greek inscriptions.
 Associate the inscriptions to the province they fall into.
-```{r}
+```{r greek inscriptions as sf}
 greek_inscriptions_in_provinces <- st_join(greek_inscriptions_sf, provinces)
 # remark: 6 inscriptions fall on the borders between two provinces. For the time being, we assign them at random (may look for the impact of this uncertainty later, but it's likely very small as the counts are large)
 greek_inscriptions_in_provinces <- greek_inscriptions_in_provinces[which(!duplicated(greek_inscriptions_in_provinces$PHI_ID)),]
@@ -753,7 +805,133 @@ print(greek_inscriptions_by_province_plot)
 #ggsave("../../figures/economic_complexity/greek_inscriptions_by_province.jpeg", greek_inscriptions_by_province_plot, width = 12, height = 5.5, dpi = 300)
 ```
 
-## Urban inscriptions
+#### All Latin inscriptions
+The same process is repeated also for all the Latin inscriptions.
+Associate the inscriptions to the province they fall into.
+```{r greek inscriptions as sf}
+all_latin_inscriptions_in_provinces <- st_join(inscriptions_sf, provinces)
+# remark: 6 inscriptions fall on the borders between two provinces. For the time being, we assign them at random (may look for the impact of this uncertainty later, but it's likely very small as the counts are large)
+all_latin_inscriptions_in_provinces <- all_latin_inscriptions_in_provinces[which(!duplicated(all_latin_inscriptions_in_provinces$`LIST-ID`)),]
+
+all_latin_inscriptions_in_provinces$Latitude <- all_latin_inscriptions_coordinates$Latitude
+all_latin_inscriptions_in_provinces$Longitude <- all_latin_inscriptions_coordinates$Longitude
+```
+
+Notice that 5450 inscriptions lie outside of the borders of the provinces.
+```{r epitaphs without a province}
+unassigned_all_latin_inscriptions_index <- which(is.na(all_latin_inscriptions_in_provinces$province))
+unassigned_all_latin_inscriptions_sf <- all_latin_inscriptions_in_provinces[unassigned_all_latin_inscriptions_index,]
+```
+
+We find the distance between these and the closest province.
+```{r find closest province to unassigned epitaphs}
+# closest province index
+unassigned_all_latin_inscriptions_sf$closest_province_index <- st_nearest_feature(unassigned_all_latin_inscriptions_sf,
+                                                                              provinces) 
+
+# find unique list of locations
+unassigned_all_latin_inscriptions_unique_locations_sf <- unassigned_all_latin_inscriptions_sf[,c("geometry","closest_province_index")] %>% unique()
+
+# compute distance to the closest province
+unassigned_all_latin_inscriptions_unique_locations_sf$distance_to_province <- st_distance(
+  unassigned_all_latin_inscriptions_unique_locations_sf,
+  provinces[unassigned_all_latin_inscriptions_unique_locations_sf$closest_province_index,],
+  by_element = TRUE
+)
+
+# transform in df 
+unassigned_all_latin_inscriptions_unique_locations <- unassigned_all_latin_inscriptions_unique_locations_sf 
+unassigned_all_latin_inscriptions_unique_locations[,c("Longitude","Latitude")] <- st_coordinates(unassigned_all_latin_inscriptions_unique_locations_sf)
+unassigned_all_latin_inscriptions_unique_locations <- unassigned_all_latin_inscriptions_unique_locations %>% st_drop_geometry()
+
+
+# transform in df
+unassigned_all_latin_inscriptions <- unassigned_all_latin_inscriptions_sf
+unassigned_all_latin_inscriptions[,c("Longitude","Latitude")] <- st_coordinates(unassigned_all_latin_inscriptions_sf)
+unassigned_all_latin_inscriptions <- unassigned_all_latin_inscriptions %>% st_drop_geometry()
+  
+  
+# merge info to retrieve full list of unassigned inscriptions with distances to nearest province
+unassigned_all_latin_inscriptions <- unassigned_all_latin_inscriptions %>% left_join(
+  unassigned_all_latin_inscriptions_unique_locations,
+  by = c("Longitude","Latitude","closest_province_index")
+)
+
+# retrieve name of the province for greater readability
+unassigned_all_latin_inscriptions$closest_province <-  provinces$province[unassigned_all_latin_inscriptions$closest_province_index]
+
+```
+
+THIS SECTION HAS TO BE IMPROVED FOR CONSISTENCY WITH THE OTHER ONES.
+
+Assign the province if the distance is less than 100km
+```{r assign epitaphs to closest province if very close}
+all_latin_inscriptions_in_provinces$province[unassigned_all_latin_inscriptions_index] <- ifelse(
+  unassigned_all_latin_inscriptions$distance_to_province < set_units(100000,"meters"),
+  unassigned_all_latin_inscriptions$closest_province,
+  NA
+)
+```
+
+Deal manually with Balearic Islands and Aegean Sea.
+These are island regions for which small precision issues may lead to misclassification.
+```{r manually assign epitaphs in Balearic, Achaia, Sicilia, and Britannia}
+# Balearic
+Balearic_all_latin_inscriptions_id <- unassigned_all_latin_inscriptions[unassigned_all_latin_inscriptions$closest_province=="Hispania Citerior","LIST-ID"]
+all_latin_inscriptions_in_provinces$province[all_latin_inscriptions_in_provinces$`LIST-ID` %in% Balearic_all_latin_inscriptions_id$`LIST-ID`] <- "Hispania Citerior"
+
+# Achaia
+Achaia_all_latin_inscriptions_id <- unassigned_all_latin_inscriptions[unassigned_all_latin_inscriptions$closest_province=="Achaia","LIST-ID"]
+all_latin_inscriptions_in_provinces$province[all_latin_inscriptions_in_provinces$`LIST-ID` %in% Achaia_all_latin_inscriptions_id$`LIST-ID`] <- "Achaia"
+
+# Creta
+Creta_all_latin_inscriptions_id <- unassigned_all_latin_inscriptions[unassigned_all_latin_inscriptions$closest_province=="Creta","LIST-ID"]
+all_latin_inscriptions_in_provinces$province[all_latin_inscriptions_in_provinces$`LIST-ID` %in% Creta_all_latin_inscriptions_id$`LIST-ID`] <- "Creta"
+
+# Asia
+Asia_all_latin_inscriptions_id <- unassigned_all_latin_inscriptions[unassigned_all_latin_inscriptions$closest_province=="Asia","LIST-ID"]
+all_latin_inscriptions_in_provinces$province[all_latin_inscriptions_in_provinces$`LIST-ID` %in% Asia_all_latin_inscriptions_id$`LIST-ID`] <- "Asia"
+```
+
+Note that several inscriptions remain unclassified: these lie to the East of the Roman empire, but we deem them too distant to be reasonably associated with specific provinces.
+
+We plot the results:
+```{r all latin inscriptions by province}
+# base map
+all_latin_inscriptions_by_province_plot <- ggplot() +
+  # base map
+  geom_sf(data = world_no_borders_sf) +
+  # add inscriptions
+  geom_sf(data = all_latin_inscriptions_in_provinces,
+             aes(color = province)) +
+  # define theme, window, and style
+  theme_minimal() + 
+  coord_sf(xlim = c(min(all_latin_inscriptions_coordinates$Longitude), 
+                    max(all_latin_inscriptions_coordinates$Longitude)), 
+           ylim = c(min(all_latin_inscriptions_coordinates$Latitude), 
+                    max(all_latin_inscriptions_coordinates$Latitude))) +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("grey40", "white"),
+      line_col = "grey20",
+    )
+  ) 
+
+print(all_latin_inscriptions_by_province_plot)
+#ggsave("../../figures/economic_complexity/all_latin_inscriptions_by_province.pdf", all_latin_inscriptions_by_province_plot, width = 12, height = 5.5)
+#ggsave("../../figures/economic_complexity/all_latin_inscriptions_by_province.jpeg", all_latin_inscriptions_by_province_plot, width = 12, height = 5.5, dpi = 300)
+```
+
+Find counts of all Latin inscriptions by province
+```{r count of inscriptions by province}
+all_latin_inscriptions_in_provinces_counts <- table(all_latin_inscriptions_in_provinces$province)
+```
+
+
+### Urban inscriptions
 Associate each inscription to the closest town in the Pleiades data set
 ```{r find and associate each inscription to the closest town}
 # find closest city
@@ -848,7 +1026,7 @@ print(
 )
 ```
 
-# Table of occupations
+# Table of occupations ---------------------------------------------------------
 ## Country
 Prepare the data in the correct format by unlisting the occupations in each inscription
 ```{r unnest the df}
@@ -904,9 +1082,9 @@ country_table_heatmap_plot <- ggplot(country_table_heatmap, aes(occupation, coun
 
 Finally, save the results.
 ```{r save results}
-write.csv(country_table,"../../results/economic_complexity/country_table.csv")
-ggsave("../../figures/economic_complexity/country_table_heatmap.pdf", country_table_heatmap_plot, width = 15, height = 10)
-ggsave("../../figures/economic_complexity/country_table_heatmap.jpeg", country_table_heatmap_plot, width = 15, height = 10, dpi = 300)
+#write.csv(country_table,"../../results/economic_complexity/country_table.csv")
+#ggsave("../../figures/economic_complexity/country_table_heatmap.pdf", country_table_heatmap_plot, width = 15, height = 10)
+#ggsave("../../figures/economic_complexity/country_table_heatmap.jpeg", country_table_heatmap_plot, width = 15, height = 10, dpi = 300)
 ```
 
 ## Province
@@ -1056,7 +1234,7 @@ for (t in c(thresholds,"area_based")) {
 }
 ```
 
-# Uncertainty and biases TO DO
+# Uncertainty and bias mitigation ---------------------------------------------- 
 ## Uncertainty intro
 The above tables were constructed by using the occupation data as it was directly extracted from the inscriptions. 
 
@@ -1070,60 +1248,13 @@ In this section we propose to systematically address these biases with the aim t
 
 We do this by constructing functions to each source of bias.
 
-## Functions to address bias TO DO
-### Gender bias ONGOING ¨
-We multiply women-only occupations (which for simplicity we take to be those with female-only names), by a corrective factor, derived from the men/women ratio in funerary inscriptions. 
-
-```{r extract info about gender inscriptions}
-# compute a table of frequency of gender from funerary inscriptions
-EDH_epitaphs <- EDH_people[EDH_people$type_of_inscription_clean=="epitaph",]
-EDH_gender <- table(EDH_epitaphs$gender)
-EDH_gender_NA <- sum(is.na(EDH_epitaphs$gender))
-print(EDH_gender)
-print(paste("NA values:", EDH_gender_NA))
-
-# select female occupations
-occupations_female <- occupations_all$std_spelling[occupations_all$gender=="female"]
-```
-
-Gender is specified as "female", "male", but also uncertain but probably male "M?", uncertain but probably female "W?", and undefined (NA). We account for this in the definition of the ratio.
-```{r compute the men/women ratio in funerary inscriptions}
-gender_ratio_simple <- as.numeric(EDH_gender["male"]/EDH_gender["female"])
-gender_ratio_max <- (EDH_gender[["male"]]+EDH_gender[["M?"]]+EDH_gender[["W?"]]+EDH_gender_NA)/EDH_gender[["female"]]
-gender_ratio_min <- EDH_gender[["male"]]/(EDH_gender[["female"]]+EDH_gender[["M?"]]+EDH_gender[["W?"]]+EDH_gender_NA)
-```
-
-Randomly generate bias correction values based on a triangular distribution with range (gender_ratio_min,gender_ratio_max) and peak at gender_ratio_simple.
-
-```{r vector of gender ratio bias}
-# randomly generate the vector according to a triangular distribution
-gender_ratio_v <- rtri(n = 1000,
-                       min = gender_ratio_min,
-                       max = gender_ratio_max,
-                       mode = gender_ratio_simple)
-
-# visual check of the distribution of the results
-plot(hist(gender_ratio_v,20))
-```
-
-```{r gender bias function}
-gender_bias <- function(table, bias){
-  # update columns with female occupations
-  table[,colnames(table)%in%occupations_female] <- bias*table[,colnames(table)%in%occupations_female] 
-  return(table)
-}
-```
-
-
-### Research bias ONGOING
-#### Estimate population by geographical unit
-##### Notes on population estimation
-To establish which geographical units are overrepresented in inscriptions, we can use the ratio between funerary inscriptions and the total number of people who lived/died in that geographical unit while it was part of the Roman Empire. 
-The assumption is that deaths happen (theoretically) proportionally to the population.
-
-To do this, we need to estimate the total population residing in each geographical unit and how it changed in time.
-Doing this carefully would require much more information than what is available. 
-What we present here a simplified approach that is only based on peak population estimates available from the literature.
+## Functions to address bias
+### Estimate population by geographical unit
+#### Intro
+A major obstacle in reconstructing the occupational structure of the Roman Empire is the lack of precise data on population size and distribution.
+Our inscription-based data sets offer a cumulative view of occupations over the entire duration of the Empire.
+If the rate of inscription production were constant across individuals, we would expect the total number of inscriptions in a region to be proportional to the total number of person-years lived in that region while it was under Roman rule.
+Here, we aim to reconstruct that number in order to provide a more accurate estimate of the occupational structure.
 
 As far as we know, there are no estimates of the Ancient Roman population at the provincial level (and certainly not within the borders of modern nations or town hinterlands).
 Instead, a set of estimates exist for the population in 10 macroregions of the Empire (Table 3.1 in "Scheidel W. Demography. In: Scheidel W, Morris I, Saller RP, eds. The Cambridge Economic History of the Greco-Roman World. Cambridge University Press; 2007:38-86") and for the population of individual urban units (Hanson).
@@ -1134,15 +1265,15 @@ We subtract the urban population to obtain an estimate of the rural population i
 To each province in the macroregion, we find the urban population by summing the population estimates of the urban areas falling within it. We find the rural population by taking a part of the rural population of the macroregion, proportionate to the area of the province.
 Note that this is the same as assuming that the rural population density is approximately constant within a macroregion. This is a crude assumption, but the most natural one that can be made with limited data and without additional population models. In the future, it can be improved by integrating additional information (e.g., terrain and suitability to agriculture).
 
-To estimate population in each year before and after the peak assume naively a constant annual population growth/decline rate r. We take r distributed according to a triangular distribution between 0 and 0.5%, with a peak at 0.15%, following Hanson's estimates for urban population (Hanson, J., 2021. New approaches to the urban population and urbanization rate of the Roman Empire, AD 1 to 200.). We compute the 
+To estimate population in each year before and after the peak assume naively a constant annual population growth/decline rate r. We take r distributed according to a triangular distribution between 0 and 0.5%, with a peak at 0.15%, following Hanson's estimates for urban population (Hanson, J., 2021. New approaches to the urban population and urbanization rate of the Roman Empire, AD 1 to 200.). 
 
+We sampled r 1,000 times to generate 1,000 different sets of population curves, with each set representing a possible reconstruction of the maximum and minimum urban, rural, and total population for the provinces of the Roman Empire.
 
-
-
+For each province, we integrated these population curves over the period during which the province was part of the Roman Empire. 
+This allowed us to estimate total number of person-years lived in the province under Roman rule. 
 
 RK: This is a very simplified method.
-
-##### Provinces
+#### Provinces
 First, associate each province to the macroregion mentioned by Scheidel.
 ```{r assign each province to its macroregion}
 provinces_macroregions_list <- list(
@@ -1258,21 +1389,6 @@ provinces_macroregions_full_info_df$area_proportion <- as.numeric(
   provinces_macroregions_full_info_df$area/provinces_macroregions_full_info_df$macroregion_area)
 ```
 
-Create an sf object of the macroregions DOES NOT WORK
-```{r macroregions sf SKIP}
-# associate macroregions to provinces in the sf
-#provinces_macroregions <- left_join(provinces,
-#                                    provinces_macroregions_df)
-
-# unite macroregions
-#macroregions <- provinces_macroregions %>%
-#  group_by(macroregion) %>%
-#  summarize() %>%
-#  st_union()
-
-#st_write(macroregions,"C:/Users/au732923/OneDrive - Aarhus Universitet/Desktop/macroregions.shp")
-```
-
 Compute the urban population for each province.
 ```{r urban population by province}
 # assign each city to its closest province 
@@ -1291,8 +1407,7 @@ province_urban_population_df <- cities_in_provinces_df %>%
   summarize(urban_pop = sum(pop_est)) 
 ```
 
-If there are provinces without cities, assign population 0.
-This is actualy the case of the Alpes Graiae. 
+Assign urban population 0 to provinces without cities (e.g., Alpes Graiae).
 ```{r provinces without cities}
 # add a row with value 0 
 province_urban_population_df <- rbind(
@@ -1430,7 +1545,7 @@ Finally save these results.
 
 ```
 
-##### Countries
+#### Countries
 We perform a similar operation to estimate the urban and rural population who lived within the borders of modern day countries.
 We estimate the urban population using Hanson's dataset. 
 We estimate the rural population by distributing the above estimates of rural populations proportionately to the percentage of area of a province falling in each country.
@@ -1584,8 +1699,8 @@ countries_population_df <-  intersections_pop_full_info_df %>%
 #          "../../results/economic_complexity/intersections_population_full_info.csv")
 ```
 
-##### Total number of deaths in each province
-The above population estimates for the geographical units refer to peak population. We now use them to estimate how many people have died whilst the province was part of the Roman empire
+#### Total number of person-years in each province
+The above population estimates for the geographical units refer to peak population. We now use them to estimate how many person-years have been lived whilst the province was part of the Roman empire
 ```{r construct total population estimates for each province}
 # read csv with info on when provinces were conquered/lost
 province_dates_df <- read.csv("../../data/economic_complexity/province_dates.csv",sep=";")
@@ -1641,40 +1756,11 @@ for (i in 1:n_iter) {
 }
 
 # save results
-write.csv(provinces_total_population_df,"../../results/economic_complexity/provinces_total_population.csv")
+#write.csv(provinces_total_population_df,"../../results/economic_complexity/provinces_total_population.csv")
 ```
 
-#### Ratios population/epitaph TO REDO WITH UPDATED COUNTS GIVEN THE LANGUAGE
-First, compute the ratios of the people per epitaph
-```{r population/epitaph by country}
-# countries
-# count epitaphs by country
-epitaphs_in_countries_counts <- epitaphs_in_countries$country %>% 
-  table() %>%
-  as.data.frame() %>%
-  setNames(c("country","epitaphs"))
-
-# initialise data frame of bias 
-ratio_epitaphs_pop_countries <- data.frame(
-  country = row_names_c) %>% 
-  left_join(countries_population_df[,c("country","tot_pop_min","tot_pop_max")]) %>%
-  left_join(epitaphs_in_countries_counts)
-
-# add columns of ratios between population estimates and epitaphs counts
-ratio_epitaphs_pop_countries$people_per_epitaph_min <- ratio_epitaphs_pop_countries$tot_pop_min/ratio_epitaphs_pop_countries$epitaphs
-ratio_epitaphs_pop_countries$people_per_epitaph_max <- ratio_epitaphs_pop_countries$tot_pop_max/ratio_epitaphs_pop_countries$epitaphs
-
-# note that Georgia has no population data (as a result of the intersection with the provinces) and no epitaphs
-#row_names_c[which(!row_names_c%in%unique(epitaphs_in_countries$country))]
-
-# hence we artificially assign to it the ratio across the data set
-ratio_epitaphs_pop_countries[ratio_epitaphs_pop_countries$country=="GEO","people_per_epitaph_min"] <-
-  sum(countries_population_df$tot_pop_min)/nrow(epitaphs_in_countries)
-ratio_epitaphs_pop_countries[ratio_epitaphs_pop_countries$country=="GEO","people_per_epitaph_max"] <-
-  sum(countries_population_df$tot_pop_max)/nrow(epitaphs_in_countries)
-```
-
-Repeat the same for provinces.
+#### Ratios population/epitaph
+First, compute the ratios of the people per epitaph by provinces.
 ```{r population/epitaph by province}
 # province
 # count epitaphs by province
@@ -1702,16 +1788,76 @@ ratio_epitaphs_pop_provinces[ratio_epitaphs_pop_provinces$province %in% c("Easte
 
 ```
 
-Now, save the results BUT NOTE THAT THEY WILL HAVE TO BE REVIEWED
+Now, save the results
 ```{r save results}
 # save results
-write.csv(ratio_epitaphs_pop_countries,
-          "../../results/economic_complexity/ratio_epitaphs_pop_countries.csv")
-write.csv(ratio_epitaphs_pop_provinces,
-          "../../results/economic_complexity/ratio_epitaphs_pop_provinces.csv")
+#write.csv(ratio_epitaphs_pop_countries,
+#          "../../results/economic_complexity/ratio_epitaphs_pop_countries.csv")
+#write.csv(ratio_epitaphs_pop_provinces,
+#          "../../results/economic_complexity/ratio_epitaphs_pop_provinces.csv")
 ```
 
-### Farmers OK
+Repeat the same for person-year by epitaph
+First, compute the ratios of the people per epitaph by provinces.
+```{r person_years/epitaph by province}
+# province
+# initialise data frame of bias 
+ratio_epitaphs_tot_pop_provinces <- data.frame(
+  province = row_names_p) %>% 
+  left_join(provinces_total_population_df[,c("iter","province","tot_pop_min_grand_total","tot_pop_max_grand_total")]) %>%
+  left_join(epitaphs_in_provinces_counts)
+
+# add columns of ratios between population estimates and epitaphs counts
+ratio_epitaphs_tot_pop_provinces$person_years_per_epitaph_min <- ratio_epitaphs_tot_pop_provinces$tot_pop_min_grand_total/ratio_epitaphs_tot_pop_provinces$epitaphs
+ratio_epitaphs_tot_pop_provinces$person_years_per_epitaph_max <- ratio_epitaphs_tot_pop_provinces$tot_pop_max_grand_total/ratio_epitaphs_tot_pop_provinces$epitaphs
+```
+
+It is clear that the number of epitaphs does not correspond to the cumulative population.
+
+### Gender bias
+We multiply women-only occupations (which for simplicity we take to be those with female-only names), by a corrective factor, derived from the men/women ratio in funerary inscriptions. 
+```{r extract info about gender inscriptions}
+# compute a table of frequency of gender from funerary inscriptions
+EDH_epitaphs <- EDH_people[EDH_people$type_of_inscription_clean=="epitaph",]
+EDH_gender <- table(EDH_epitaphs$gender)
+EDH_gender_NA <- sum(is.na(EDH_epitaphs$gender))
+print(EDH_gender)
+print(paste("NA values:", EDH_gender_NA))
+
+# select female occupations
+occupations_female <- occupations_all$std_spelling[occupations_all$gender=="female"]
+```
+
+Gender is specified as "female", "male", but also uncertain but probably male "M?", uncertain but probably female "W?", and undefined (NA). We account for this in the definition of the ratio.
+```{r compute the men/women ratio in funerary inscriptions}
+gender_ratio_simple <- as.numeric(EDH_gender["male"]/EDH_gender["female"])
+gender_ratio_max <- (EDH_gender[["male"]]+EDH_gender[["M?"]]+EDH_gender[["W?"]]+EDH_gender_NA)/EDH_gender[["female"]]
+gender_ratio_min <- EDH_gender[["male"]]/(EDH_gender[["female"]]+EDH_gender[["M?"]]+EDH_gender[["W?"]]+EDH_gender_NA)
+```
+
+Randomly generate bias correction values based on a triangular distribution with range (gender_ratio_min,gender_ratio_max) and peak at gender_ratio_simple.
+```{r vector of gender ratio bias}
+# randomly generate the vector according to a triangular distribution
+gender_ratio_v <- rtri(n = 1000,
+                       min = gender_ratio_min,
+                       max = gender_ratio_max,
+                       mode = gender_ratio_simple)
+
+# visual check of the distribution of the results
+plot(hist(gender_ratio_v,20))
+```
+
+Define a function to correct gender bias of a given occupational table
+```{r gender bias function}
+gender_bias <- function(table, bias){
+  # update columns with female occupations
+  table[,colnames(table)%in%occupations_female] <- bias*table[,colnames(table)%in%occupations_female] 
+  return(table)
+}
+```
+
+### Agriculture bias
+#### Intro
 The Roman Empire was primarily a rural society.
 Our above estimates indicate that the rural population would have comprised roughly between 84% and 86% of the total population, though this varies widely among regions.
 Most of these people would have been involved in agriculture, but evidence of farming as an occupation in inscriptions is extremely scarce (only 7 references in the whole empire).
@@ -1730,6 +1876,8 @@ Then the above assumption translates into the following simple equation: a+f = p
 which yields a = dpr/(1-pr)-f.
 RK: when p=1, 1-pr=u, where u is the urban population, so a=dr/u-f
 
+#### Implementation
+Implement the above formula as an algorithm
 ```{r function to expand the count of "agricola" in the table}
 all_food_prod_occs <- occupations_status$std_spelling[occupations_status$Harris_Category=="Food-Production"]
 other_food_prof_occ <- all_food_prod_occs[!all_food_prod_occs=="agricola"]
@@ -1798,8 +1946,8 @@ agricola_correction <- function(occupation_table, p){
 }
 ```
 
-### Social status
-#### Summary
+### Social status bias
+#### Intro
 Roughly speaking, higher status people tend to be over-represented compared to lower status people in inscriptions.
 As certain occupations were primarily performed by people of high or low status, the disparity in representation affects occupation counts.
 In this section, we propose a simple (and improvable) mechanism to address this bias.
@@ -1807,21 +1955,22 @@ In this section, we propose a simple (and improvable) mechanism to address this 
 Among all inscriptions with occupations, we select those included in EDH and that thus contain references to people. 
 Among these, we focus on those that contain references to the people's status. 
 We distinguish people into two broad categories: elites and non-elite people, 
-where by elites we mean people who status is included in c("equestrian order", "decurial order, higher local offices", "senatorial order", "equestrian order", "military personnel", "lower local offices, administration of imperial estates", "emperor / imperial household", "rulers (foreign)"), and by non-elites we mean people whose status in included in c("freedmen / freedwomen", "slaves", "Augustales").
+where by elites we mean people whose status is included in c("equestrian order", "decurial order, higher local offices", "senatorial order", "equestrian order", "military personnel", "lower local offices, administration of imperial estates", "emperor / imperial household", "rulers (foreign)"), and by non-elites we mean people whose status in included in c("freedmen / freedwomen", "slaves", "Augustales").
 Among inscriptions which contain references to occupations,  we find 7358 references to elite people,	1258 references to non-elites, thus yielding a ratio of approximately 5.85 elite people per non-elite person, which is highly unrealistic. (NEED TO CLARIFY THIS)
 Note however that most inscriptions with occupations contain no reference to status.
 
 Each occupation is classified in one of nineteen Harris Categories.
-For each Harris Category, we count the co-occurrence of of references to elite/non-elite statuses with occupations in that category.
+For each Harris Category, we count the co-occurrence of references to elite/non-elite statuses with occupations in that category.
 (Rk: At the moment we are only looking at co-occurrence, and thus we do not have a mechanism to check whether the person whose status is mentioned is also the person who performs a given occupation. This can lead to wrong associations, e.g., "Senator X hires a cook" would associate senator and cook, and thus necessitates a more careful assessment of the source material in the future.)
-We then compute how commonly elite/on-elite people were employed in a given category (e.g., 10% of non-elite people were employed in clothing-related occupations, but only 1% of elite people were). 
+We then compute how commonly elite/non-elite people were employed in a given category (e.g., 10% of non-elite people were employed in clothing-related occupations, but only 1% of elite people were). 
 This allows us to determine whether a category was mostly an elite or non-elite one.
 
 We use this information to inflate the counts of occupations in categories dominated by non-elites by a fixed factor, which we arbitrarily fix as between 1 (no inflation) and 5 times with a mean of 3.
 Rk: These factors are arbitrary because we do no know exactly how many people were elite or non-elite in Ancient Rome, with estimates of 10000 senators and equites and 200-400k military personnel in a total of 60 million people cited by Wikipedia, which would imply that a huge corrective factor is needed.
-A more careful approach would involve assuming simplistically that if one had status, then they would include it in the inscriptions, and thus assuing that those who did not indicate their status were probably non-elites. This would be roughly 3/4 of the total.
+A more careful approach would involve assuming simplistically that if one had status, then they would include it in the inscriptions, and thus assuming that those who did not indicate their status were probably non-elites. This would be roughly 3/4 of the total.
 
 #### Implementation
+Classify occupations as elite or non-elite based on their Harris category
 ```{r status and occupations}
 # assign status to each Harris category
 Harris_category_status <- data.frame(
@@ -1838,6 +1987,7 @@ occupations_status <- occupations_status[occupations_status$std_spelling %in% co
 non_elite_occupations <- occupations_status$std_spelling[!occupations_status$elite]
 ```
 
+Define a function to inflate the non-elite occupation coutns by a corrective factor
 ```{r function to inflate a table by a given value}
 status_bias_correction <- function(occupation_table, corrective_factor){
   output_table <- occupation_table
@@ -1846,7 +1996,8 @@ status_bias_correction <- function(occupation_table, corrective_factor){
 }
 ```
 
-```{r sample the correcive factor from a certain interval and output several examples of corrections}
+Sample the corrective factor from a certain interval and output several estimates of corrections
+```{r sample the corrective factor output several corrections}
 status_bias_correction_stochastic <- function(occupation_table, cf_min, cf_max, n_samples){
   # initialise empty list
   output_table_list <- list()
@@ -1869,12 +2020,14 @@ status_bias_correction_stochastic <- function(occupation_table, cf_min, cf_max, 
 }
 ```
 
-### Language OK
+### Language 
+#### Intro
 Many inscriptions found within the limits of the Roman Empire were written in Greek. These were primarily concentrated in the Eastern Roman Empire. We need to account for them to avoid language bias.
 
 In this section we use the counts of greek inscriptions by geographical units that were computed in the previous sections.
 We assume the same distribution of professions in the (not analysed) Greek inscriptions and use their locations to proportionally adjust the occupation tables in the geographical units. 
 
+#### Implementation
 Create a table of counts of greek-inscription by geographical unit (country or province).
 ```{r table of greek-inscriptions by location}
 # modern country
@@ -1955,6 +2108,8 @@ Say that a geographical unit "g_i" contains "n_i" occupation-related inscription
 By summing the first n_1 values of a column of the above sample, we obtain the total number of occupations in g_1. 
 By summing the n_2 values between n_1+1 and n_1+n_2 we obtain the total number of occupations in g_2. etc.
 We thus obtain counts of occupations in each geographical unit.
+
+We begin with modern day countries.
 ```{r total occupations by country (from Greek inscriptions)}
 # avoid zeros for simplicity
 greek_inscriptions_w_occupations_in_countries_counts_no_zeros_df <- greek_inscriptions_w_occupations_in_countries_counts_df[!greek_inscriptions_w_occupations_in_countries_counts_df$frequency_rounded==0,]
@@ -2001,6 +2156,7 @@ occupations_in_greek_inscriptions_by_country_counts_df <- data.frame(
 ) %>% cbind(occupations_in_greek_inscriptions_by_country_counts)
 ```
 
+Then we repeat the same for provinces
 ```{r total occupations by province (from Greek inscriptions)}
 # avoid zeros for simplicity
 greek_inscriptions_w_occupations_in_provinces_counts_no_zeros_df <- greek_inscriptions_w_occupations_in_provinces_counts_df[!greek_inscriptions_w_occupations_in_provinces_counts_df$frequency_rounded==0,]
@@ -2048,9 +2204,7 @@ occupations_in_greek_inscriptions_by_province_counts_df <- data.frame(
 
 For each geographical unit, we have a distribution of occupations as emerged from the Latin inscriptions.
 We want to use it to redistribute proportionally the greek occupation counts to specific occupations (in each province).
-
 However, we want to avoid unrealistic situations in which a very large number of Greek inscriptions is assigned very few occupation types, which would be the case for geographical units in which Greek was prevalent and Latin inscriptions very rare.
-
 To see if this situation could arise, we compare counts of Latin and Roman inscriptions by geographical unit.
 
 First by province:
@@ -2159,7 +2313,6 @@ for (country in rownames(country_table)) {
 ```
 
 Now that we have the distribution, we want to sample with replacement from this set with sample size equal to the estimated number of occupation-related Greek inscriptions. This will give us an estimated distribution of occupations deriving from the Greek inscriptions
-
 ```{r sample occupations from provinces and surroundings}
 #initialise the list
 province_table_greek_list <- list()
@@ -2291,7 +2444,6 @@ write.csv(country_table_greek_long_df,
           "../../results/economic_complexity/greek_occupations_by_country.csv")
 ```
 
-
 Finally we add the tables of greek and latin inscriptions together to obtain the result 
 ```{r add the tables}
 # provinces
@@ -2352,8 +2504,8 @@ for(i in 1:n_iterations){
 
 ```
 
-Example heat map
-```{r}
+We output an example of the heat map
+```{r example heat map}
 province_latin_and_greek_table_heatmap <- as.data.frame(province_table_greek_latin_list[["it_1"]]) %>% setNames(c("province","occupation","frequency"))
 province_latin_and_greek_table_heatmap$log_frequency <- log(province_latin_and_greek_table_heatmap$frequency)
 
@@ -2372,20 +2524,61 @@ print(province_latin_and_greek_table_heatmap_plot)
 
 One thing that looks odd to me is the fact that for the Greek-speaking regions we are sampling many times from a limited pool of occupations that lead to very concentrated distribution of job types. This diminishes the "lower triangularity" of the matrix. We might have to expand the pool to the entire system. This can be done by adjusting the threshold :)
 
-## Specialisation function for updates TO DO NOT PRIORITY
-We create a function to subdivide an occupation into suboccupations as new evidence is gathered
+### Research bias
+#### Intro
+We are interested in reconstructing the occupational structure in each geographical unit at a given point in time.
+Our inscription-based datasets offer a cumulative view of occupations over the entire duration of the Empire.
+If the rate of inscription production were constant across individuals, we would expect the total number of inscriptions in a region to be proportional to the total number of person-years lived in that region while it was under Roman rule.
 
-## Apply bias correction TO DO (in different orders)
+The final step is to recalibrate the total number of occupations across all provinces to reflect the population in each geographical unit at a given point in time.
+This adjustment helps to account for potential differences in the rate of inscription production across various geographical units and corrects for biases arising from the uneven extent of archaeological excavations in different regions of the Roman Empire.
+#### Implementation
+We define a function that returns an occupation table with rowsums proportional to the population of a province
+```{r research core}
+research_correction <- function(occupation_table,minmax){
+  # find names of geographical units
+  gu <- rownames(occupation_table)
+  gu_pop_df <-  provinces_population_df
+  rownames(gu_pop_df) <- gu_pop_df$province
+  
+  # initialise the output
+  if (minmax == "min"){
+      output_table_c <- occupation_table/rowSums(occupation_table)*gu_pop_df[gu,"tot_pop_min"] # ERROR HERE
+  } else if (minmax == "max"){
+      output_table_c <- occupation_table/rowSums(occupation_table)*gu_pop_df[gu,"tot_pop_max"]
+  }
+  
+  # sort
+  # col names (occupations, sorted by frequency)
+  col_names <- names(
+    sort(
+      colSums(output_table_c),
+      decreasing=TRUE)
+    )
+  # row names (geographical units, sorted by total counts)
+  row_names <- names(
+    sort(
+      rowSums(output_table_c),
+      decreasing=TRUE)
+    )
+  
+   # apply sorting
+  output_table_c <- output_table_c[row_names,col_names]
+  return(output_table_c)
+}
+```
 
-### Attempt with province table.
+## Apply bias correction (in different orders) ONGOING
+### Bias correction for the province table.
 Order to follow:
 1. Language
-2. Research bias
-3. Status bias
-4. Gender
-5  Agricola
+2. Status bias
+3. Gender
+4. Agricola
+5. Research bias NEW
 
-#### 1. Language
+#### Simple Example
+##### 1. Language
 ```{r 1. Language}
 # 1. Language
 # select one of the many precomputed ones:
@@ -2397,76 +2590,56 @@ table_step_1 <- province_table_greek_latin_list[[1]]
 table_step_1 <- table_step_1[!rownames(table_step_1)%in%c("Eastern border","North-eastern border"),]
 ```
 
-#### 2. Research bias
-Repeat the same for provinces.
-```{r rescale by epitaph per person}
-# Latin epitaph counts by province 
-epitaphs_in_provinces_counts_2 <- epitaphs_in_provinces_counts
-rownames(epitaphs_in_provinces_counts_2) <- epitaphs_in_provinces_counts_2$province
-epitaphs_in_provinces_counts_2<-epitaphs_in_provinces_counts_2[rownames(table_step_1),]
-colnames(epitaphs_in_provinces_counts_2) <- c("province","latin_epitaphs")
-
-# count of greek inscriptions (include also those with 0)
-greek_inscriptions_in_provinces_counts_df_2 <- greek_inscriptions_in_provinces_counts_df 
-greek_inscriptions_in_provinces_counts_df_2 <- rbind(greek_inscriptions_in_provinces_counts_df_2,
-                                                     data.frame(province = c("Alpes Maritimae","Alpes Graiae"), 
-                                                                frequency = c(0,0)))
-rownames(greek_inscriptions_in_provinces_counts_df_2) <- greek_inscriptions_in_provinces_counts_df_2$province
-greek_inscriptions_in_provinces_counts_df_2 <- greek_inscriptions_in_provinces_counts_df_2[rownames(table_step_1),]
-
-# count total inscriptions and ratio of assume same ratio of funerary ones
-epitaphs_in_provinces_counts_2$greek_epitaphs <- epitaphs_in_provinces_counts_2$latin_epitaphs*greek_inscriptions_in_provinces_counts_df_2$frequency/rowSums(start_table[rownames(table_step_1),])
-
-epitaphs_in_provinces_counts_2$epitaphs <- epitaphs_in_provinces_counts_2$latin_epitaphs+epitaphs_in_provinces_counts_2$greek_epitaphs
-
-# extract population with iteration 1
-provinces_total_population_it1_df <- provinces_total_population_df[provinces_total_population_df$iter==1,]
-
-# initialise data frame of bias 
-ratio_epitaphs_pop_provinces_2 <- data.frame(
-  province = rownames(table_step_1)) %>% 
-  left_join(provinces_total_population_it1_df[,c("province","urb_pop_grand_total","tot_pop_min_grand_total","tot_pop_max_grand_total")]) %>%
-  left_join(epitaphs_in_provinces_counts_2)
-
-# add columns of ratios between population estimates and epitaphs counts
-ratio_epitaphs_pop_provinces_2$people_per_epitaph_min <- ratio_epitaphs_pop_provinces_2$tot_pop_min_grand_total/(30*ratio_epitaphs_pop_provinces_2$epitaphs)
-ratio_epitaphs_pop_provinces_2$people_per_epitaph_max <- ratio_epitaphs_pop_provinces_2$tot_pop_max_grand_total/(30*ratio_epitaphs_pop_provinces_2$epitaphs)
-ratio_epitaphs_pop_provinces_2$people_per_epitaph_urban <- ratio_epitaphs_pop_provinces_2$urb_pop_grand_total/(30*ratio_epitaphs_pop_provinces_2$epitaphs)
-
-rownames(ratio_epitaphs_pop_provinces_2) <- ratio_epitaphs_pop_provinces_2$province
-
-# sort info
-ratio_epitaphs_pop_provinces_2<-ratio_epitaphs_pop_provinces_2[rownames(table_step_1),]
-
-# rescale by min people per epitaph
-table_step_2_min <- table_step_1*ratio_epitaphs_pop_provinces_2$people_per_epitaph_min
-# rescale by urban people per epitaph (we do not want to delete, we just want to add)
-table_step_2_urban <- table_step_1*sapply(ratio_epitaphs_pop_provinces_2$people_per_epitaph_urban,max,1)
-
+##### 2. Status bias
+```{r}
+table_step_2_min <- status_bias_correction_stochastic(table_step_1,3,5,1)[[1]]
 ```
 
-#### 3. Status bias
+##### 3. Gender
 ```{r}
-table_step_3_min <- status_bias_correction_stochastic(table_step_2_urban,3,5,1)[[1]]
-#table_step_3_min <- status_bias_correction_stochastic(table_step_1,3,5,1)[[1]]
+table_step_3_min <- gender_bias(table_step_2_min,gender_ratio_v[1])
 ```
 
-
-#### 4. Gender
-
-```{r}
-table_step_4_min <-  gender_bias(table_step_3_min,gender_ratio_v[1])
-```
-
-#### 5. Agricola
-```{r}
-table_step_5_min <- agricola_correction(table_step_4_min,0.95)$min
-#write.csv(table_step_5_min,"../../results/economic_complexity/table_step_5_min.csv")
+##### 4. Agricola
+```{r apply correction on agricola}
+table_step_4_min <- agricola_correction(table_step_3_min,0.95)$min
+#write.csv(table_step_4_min,"../../results/economic_complexity/table_step_4_min.csv")
 
 #write.csv(start_table,"../../results/economic_complexity/start_table.csv")
 ```
 
-```{r}
+##### 5. Research bias
+Ensure occupation-related inscriptions are proportional to population
+```{r multiply so that it is proportional to population}
+# isolate total population
+provinces_population_df_2 <- provinces_population_df
+rownames(provinces_population_df_2) <- provinces_population_df_2$province
+
+# rescale by total population
+table_step_5_min <- table_step_4_min/rowSums(table_step_4_min)*provinces_population_df_2[rownames(table_step_4_min),"tot_pop_min"]
+
+# sort (TRANSFORM INTO FUNCTION)
+ # sort
+  # col names (occupations, sorted by frequency)
+  col_names <- names(
+    sort(
+      colSums(table_step_5_min),
+      decreasing=TRUE)
+    )
+  # row names (geographical units, sorted by total counts)
+  row_names <- names(
+    sort(
+      rowSums(table_step_5_min),
+      decreasing=TRUE)
+    )
+  
+   # apply sorting
+  table_step_5_min <- table_step_5_min[row_names,col_names]
+```
+
+
+##### Maps
+```{r heat map of original data}
 start_table_heatmap <- as.data.frame(start_table) %>% setNames(c("province","occupation","frequency"))
 start_table_heatmap$log_frequency <- log(start_table_heatmap$frequency)
 
@@ -2484,7 +2657,26 @@ print(start_table_heatmap_plot)
 ```
 
 
-```{r}
+```{r heatmap of table 1 (after language correction)}
+table_step_1_min_heatmap <- as.data.frame(table_step_1) %>% setNames(c("province","occupation","frequency"))
+table_step_1_min_heatmap$log_frequency <- log(table_step_1_min_heatmap$frequency)
+
+table_step_1_min_heatmap_plot <- ggplot(table_step_1_min_heatmap, aes(occupation, province, fill=log_frequency)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(x = "occupation", 
+       y = "province", 
+       fill ="log(frequency)",
+       title = "Frequency of occupations in inscriptions by province") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
+
+print(table_step_1_min_heatmap_plot)
+```
+
+
+
+```{r heatmap of the final data}
 table_step_5_min_heatmap <- as.data.frame(table_step_5_min) %>% setNames(c("province","occupation","frequency"))
 table_step_5_min_heatmap$log_frequency <- log(table_step_5_min_heatmap$frequency)
 
@@ -2501,15 +2693,312 @@ table_step_5_min_heatmap_plot <- ggplot(table_step_5_min_heatmap, aes(occupation
 print(table_step_5_min_heatmap_plot)
 ```
 
-```{r}
+
+
+
+```{r heatmap of the final data ALTERNATIVE}
+table_step_6_min_heatmap <- as.data.frame(table_step_6_min) %>% setNames(c("province","occupation","frequency"))
+table_step_6_min_heatmap$log_frequency <- log(table_step_6_min_heatmap$frequency)
+
+table_step_6_min_heatmap_plot <- ggplot(table_step_6_min_heatmap, aes(occupation, province, fill=log_frequency)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(x = "occupation", 
+       y = "province", 
+       fill ="log(frequency)",
+       title = "Frequency of occupations in inscriptions by province") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
+
+print(table_step_6_min_heatmap_plot)
+```
+
+
+
+```{r study change in rank}
 a <- numeric(54)
 for (i in 1:54){
-  a[i] <- which(rownames(start_table)==rownames(table_step_5_min)[i])
+  a[i] <- which(rownames(start_table)==rownames(table_step_6_min)[i])
 }
 
-change_in_rank_df <- data.frame(province = rownames(table_step_5_min),
+change_in_rank_df <- data.frame(province = rownames(table_step_6_min),
                                 old_rank = a,
                                 new_rank = 1:54,
                                 change_in_rank = a-1:54)
 ```
+
+
+#### Generate tables with probabilities
+We apply the bias correction stategies also accounting for the uncertainty they entail.
+We let:
+* l_it be the iterator for the language bias
+* s_it be the iterator for the status bias
+* g_it be the iterator for the gender bias
+* p    be the parameter in the rural population model
+
+```{r bias-corrected df of tables with probabilities}
+# set number of iterations
+l_it_n <- 10
+s_it_n <- 5 
+g_it_n <- 5  # up to 1000
+p <- 0.95     # p<1 
+
+# number of geographical units and occupations
+n_gu <- 54 # compute them from province_table_greek_latin_list after the issue with border regions has been corrected
+n_occ <- 430
+
+# compute number of rows of the final table
+n_rows <- n_gu*n_occ*l_it_n*s_it_n*g_it_n*2
+
+# initialise df occupation tables
+bias_corrected_tables_df <- data.frame(
+  province = rep("NA",n_rows),
+  occupation = NA,
+  value = 0,
+  minmax = NA)
+ 
+# initialise index
+index_start <- 1
+
+for (l_it in 1:l_it_n) {
+  # 1. Language
+  table_step_1 <- province_table_greek_latin_list[[l_it]]
+  # delete the border regions (WILL HAVE TO BE DONE FROM THE START LATER ON)
+  table_step_1 <- table_step_1[!rownames(table_step_1)%in%c("Eastern border","North-eastern border"),]
+
+  # 2. status bias
+  table_step_2_list <- status_bias_correction_stochastic(table_step_1,3,5,s_it_n)
+  for (s_it in 1:s_it_n) {
+    table_step_2 <- table_step_2_list[[s_it]]
+    
+    # 3. gender bias
+    for (g_it in 1:g_it_n) {
+      gender_ratio <- gender_ratio_v[g_it]
+      table_step_3 <- gender_bias(table_step_2,gender_ratio)
+
+      # 4. agricola
+      table_step_4_list <- agricola_correction(table_step_3,p)
+      table_step_4_min <- table_step_4_list$min
+      table_step_4_max <- table_step_4_list$max
+
+      # 5. research bias
+      table_step_5_min <- research_correction(table_step_4_min, "min")
+      table_step_5_max <- research_correction(table_step_4_max, "max")
+      
+      # Record information
+      step_5_min_df <- as.data.frame(table_step_5_min) %>%
+        setNames(c("province","occupation","value"))
+      step_5_min_df$minmax <- "min"
+      step_5_max_df <- as.data.frame(table_step_5_max) %>%
+        setNames(c("province","occupation","value"))
+      step_5_max_df$minmax <- "max"
+      step_5_minmax_df <- rbind(step_5_min_df,step_5_max_df)
+      
+      # transform into character
+      step_5_minmax_df$province <- as.character(step_5_minmax_df$province)
+      step_5_minmax_df$occupation <- as.character(step_5_minmax_df$occupation)
+      
+      # save in larger df
+      print(index_start)
+      index_end <- index_start+2*n_gu*n_occ-1
+      bias_corrected_tables_df[index_start:index_end,] <-  step_5_minmax_df
+      
+      # set new index start
+      index_start <- index_end +1
+    }
+  }
+  print(l_it)
+}
+
+# complete df with info on the iterators
+bias_corrected_tables_df$l_it <- rep(1:l_it_n, each = n_gu*n_occ*s_it_n*g_it_n*2)
+bias_corrected_tables_df$s_it <- rep(rep(1:s_it_n, each = n_gu*n_occ*g_it_n*2),l_it_n)
+bias_corrected_tables_df$g_it <- rep(rep(1:g_it_n, each = n_gu*n_occ*2), s_it_n*l_it_n)
+
+# write csv
+write.csv(bias_corrected_tables_df,
+  file = "../../results/economic_complexity/bias_corrected_tables.csv")
+```
+
+We can extract individual tables as follows
+```{r example of bias corrected table}
+# extract the first table 
+bias_corrected_table_example_df <- bias_corrected_tables_df[1:(n_gu*n_occ),c("province","occupation","value")]
+
+# transform into a matrix
+bias_corrected_table_example <- bias_corrected_table_example_df %>%
+  pivot_wider(names_from = occupation, values_from = value) %>%
+  column_to_rownames("province")
+```
+
+## Economic complexity
+```{r Translate Michele's code for computing economic complexity}
+#Hidalgo-Hausmann classical ECI implementation (based on products and exports)
+economic_complexity <- function(mat){
+  # Compute product-product and exporter-exporter matrices
+  {
+    # Transform table into matrix
+    M_cp <- mat %>% as.matrix()
+    
+    # Calculates the revealed comparative advantage (RCA), and binarizes it -- filling True only for the exporters which exported significant quantities of the product (RCA > 1)
+    M_cp <- ((t(M_cp) / colSums(M_cp)) %>% t() / (rowSums(M_cp) / sum(M_cp))) > 1
+    
+    # Sums the number of exporters exporting the product with RCA > 1
+    ubiquity <- colSums(M_cp)
+    
+    # Sums the number of products exported by the exporter with RCA > 1
+    diversity <- rowSums(M_cp)
+    
+    # Column normalized M_cp
+    Q <- t(t(M_cp) / ubiquity)
+    
+    # Row normalized M_cp
+    R <- M_cp / diversity
+    
+    # Square product-product matrix
+    Spp <- as.matrix(t(R) %*% Q)
+    
+    # Square exporter-exporter matrix
+    Scc <- as.matrix(Q %*% t(R))
+  }
+  
+  # Calculate the eigenvector of the square product-product matrix and takes the second largest. If it doesn't correlate with ubiquity, multiplies by -1
+  {
+    # Calculate the eigenvector of the square product-product matrix and take the second largest
+    Spp_eigen <- eigen(Spp)
+    
+    # The eigenvectors are returned in random order, so we need to sort them so that we are sure we're picking the second largest
+    id_pci <- order(Spp_eigen$values)
+    
+    pci <- Re(Spp_eigen$vectors[,id_pci[length(id_pci) - 1]])
+    
+    # Check correlation and adjust sign if necessary
+    if (cor(pci, ubiquity) < 0) {
+      pci <- pci * -1
+    }
+  }
+  
+  # Calculate the eigenvector of the square exporter-exporter matrix and takes the second largest. If it doesn't correlate with ubiquity, multiplies by -1
+  {
+    # Calculate the eigenvector of the square product-product matrix and take the second largest
+    Scc_eigen <- eigen(Scc)
+    
+    # The eigenvectors are in random order, so we need to sort them so that we are sure we're picking the second largest
+    id_eci <- order(Scc_eigen$values)
+    
+    eci <- Re(Scc_eigen$vectors[,id_eci[length(id_eci) - 1]])
+    
+    # Check correlation and adjust sign if necessary
+    if (cor(eci, diversity) < 0) {
+      eci <- eci * -1
+    }
+  }
+  
+  # Compute tables for export
+  {
+    # Create the pci DataFrame 
+    pci_df <- data.frame("occupation" = colnames(M_cp), 
+                         "pci"= pci)
+    
+    # Create the eci DataFrame
+    eci_df <- data.frame("province" = rownames(M_cp),
+                         "eci" = eci)
+    
+    # pci and eci gets standardized with the same strategy described in the Atlas of Economic Complexity
+    pci_df["pci"] = (pci_df["pci"] - mean(pci_df[["pci"]])) / sd(pci_df[["pci"]])
+    eci_df["eci"] = (eci_df["eci"] - mean(eci_df[["eci"]])) / sd(eci_df[["eci"]])
+    
+    # sort the values
+    pci_df <- pci_df %>% arrange(pci)
+    eci_df <- eci_df %>% arrange(eci)
+    
+    result <- list(
+      pci = pci_df,
+      eci = eci_df
+    )
+    
+    return(result)
+  }
+}
+```
+
+```{r compute and save the values from the tables}
+for (i in 1:500) {
+  # start index
+  start_index <- (i-1)*(n_gu*n_occ)+1
+  end_index <- i*(n_gu*n_occ)
+
+  # extract the ith table 
+  table_i_df <-   bias_corrected_tables_df[
+    start_index:end_index,
+    c("province","occupation","value")
+    ]
+
+  # transform into a matrix
+  table_i <- table_i_df %>%
+    pivot_wider(names_from = occupation, values_from = value) %>%
+    column_to_rownames("province")
+  
+  # compute economic complexity
+  result_i <- economic_complexity(table_i)
+  
+  # extract and save results
+  pci_i <- result_i$pci
+  eci_i <- result_i$eci
+  
+  # Write tables to file
+  write.csv(pci_i, str_c("../../results/economic_complexity/pci_eci/pci_",i,".csv"))
+  write.csv(eci_i, str_c("../../results/economic_complexity/pci_eci/eci_",i,".csv"))
+    
+  # print progress 
+  print(i)
+}
+```
+
+```{r compute and save the values from the tables}
+for (i in 1:500) {
+  # start index
+  start_index <- (i-1)*(n_gu*n_occ)+1
+  end_index <- i*(n_gu*n_occ)
+
+  # extract the ith table 
+  table_i_df <-   bias_corrected_tables_df[
+    start_index:end_index,
+    c("province","occupation","value")
+    ]
+
+  # transform into a matrix
+  table_i <- table_i_df %>%
+    pivot_wider(names_from = occupation, values_from = value) %>%
+    column_to_rownames("province")
+  
+  # compute economic complexity
+  result_i <- economic_complexity(table_i)
+  
+  # extract and save results
+  pci_i <- result_i$pci
+  eci_i <- result_i$eci
+  
+  # Write tables to file
+  write.csv(pci_i, str_c("../../results/economic_complexity/pci_eci/pci_",i,".csv"))
+  write.csv(eci_i, str_c("../../results/economic_complexity/pci_eci/eci_",i,".csv"))
+    
+  # print progress 
+  print(i)
+}
+```
+
+
+
+
+
+
+
+```{r compute tables for export}
+
+# Write tables to file
+# write.csv(pci_df, "../../results/economic_complexity/pci_example2.csv")
+# write.csv(eci_df, "../../results/economic_complexity/eci_example2.csv")
+```
+
 
