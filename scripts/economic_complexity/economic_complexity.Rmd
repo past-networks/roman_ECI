@@ -2955,7 +2955,11 @@ for (i in 1:500) {
 }
 ```
 
-```{r compute and save the values from the tables}
+```{r compute and save the values from the tables as a single dataframe}
+# initialise dataframes (RK: pci and eci will no longer be ordered)
+pci_combined_df <- data.frame(occupation = colnames(bias_corrected_table_example))
+eci_combined_df <- data.frame(province = rownames(bias_corrected_table_example))
+
 for (i in 1:500) {
   # start index
   start_index <- (i-1)*(n_gu*n_occ)+1
@@ -2976,16 +2980,20 @@ for (i in 1:500) {
   result_i <- economic_complexity(table_i)
   
   # extract and save results
-  pci_i <- result_i$pci
-  eci_i <- result_i$eci
+  pci_i <- result_i$pci %>% setNames(c("occupation",str_c("pci_",i)))
+  eci_i <- result_i$eci %>% setNames(c("province",str_c("eci_",i)))
   
-  # Write tables to file
-  write.csv(pci_i, str_c("../../results/economic_complexity/pci_eci/pci_",i,".csv"))
-  write.csv(eci_i, str_c("../../results/economic_complexity/pci_eci/eci_",i,".csv"))
-    
+  # combine with previous table
+  pci_combined_df <- left_join(pci_combined_df,pci_i,by=join_by("occupation"))
+  eci_combined_df <- left_join(eci_combined_df,eci_i,by=join_by("province"))
+
   # print progress 
   print(i)
 }
+
+# Write tables to file
+write.csv(pci_combined_df, "../../results/economic_complexity/pci_eci/pci_combined.csv")
+write.csv(eci_combined_df, "../../results/economic_complexity/pci_eci/eci_combined.csv")
 ```
 
 
