@@ -195,6 +195,31 @@ which_gu <- function(d){
 }
 ```
 
+The following function takes a table as input and sorts its rows and columns based on the row sums and column sums respectively, before returning it as an output.
+
+```{r sort table function}
+sort_table <- function(tb, decreasing = TRUE){
+
+  # col names sorted by sums
+  col_names <- names(
+    sort(
+      colSums(tb),
+      decreasing=decreasing)
+    )
+  # row names (sorted by sums)
+  row_names <- names(
+    sort(
+      rowSums(tb),
+      decreasing=decreasing)
+    )
+  
+  # apply sorting
+  tb <- tb[row_names,col_names]
+  return(tb)
+}
+```
+
+
 # Data preparation -------------------------------------------------------------
 ## Occupational units
 First, select only the inscriptions containing information on occupations
@@ -542,32 +567,16 @@ table_of_occupations <- function(insc_w_occ){
   # unnest the list of occupations in each inscription (based on the standard occupational terms)
   insc_w_occ_unnested <- unnest(insc_w_occ,"occups_std")
   
-  # define the row and column names of the occupation table
-  # i.e., the geographical units and the occupations respectively.
-  # Sort them by frequency 
-  {
-    # row names
-    col_names_c <- names(
-    sort(
-      table(
-        insc_w_occ_unnested$occups_std),
-      decreasing=TRUE)
-    )
-    # row names (gu, sorted by total counts)
-    row_names_c <- names(
-      sort(
-        table(
-          insc_w_occ_unnested[[gu]]),
-        decreasing=TRUE)
-    )
-  }
-  
+    
   # initialise table
   occ_table <- table(insc_w_occ_unnested[[gu]],
                      insc_w_occ_unnested$occups_std)
 
-  # sort based on row and column counts
-  occ_table <- occ_table[row_names_c,col_names_c]
+  # sort the table based on row and column sums
+  occ_table <- sort_table(occ_table)
+  
+  # return occupation table
+  return(occ_table)
 } 
 ```
 
@@ -912,6 +921,9 @@ provinces_population_df <-
     "rural_pop_max",
     "tot_pop_min",
     "tot_pop_max")]
+
+# set row names
+rownames(provinces_population_df) <- provinces_population_df$province 
 ```
 
 Finally save these results.
@@ -1287,35 +1299,13 @@ agricola_correction <- function(occupation_table, p, gu_type){
   output_table_max[,"agricola"] <- a_max
   
   # sort
-  # col names (occupations, sorted by frequency)
-  col_names_min <- names(
-    sort(
-      colSums(output_table_min),
-      decreasing=TRUE)
-    )
-   col_names_max <- names(
-    sort(
-      colSums(output_table_max),
-      decreasing=TRUE)
-    )
-  # row names (geographical units, sorted by total counts)
-  row_names_min <- names(
-    sort(
-      rowSums(output_table_min),
-      decreasing=TRUE)
-    )
-   row_names_max <- names(
-    sort(
-      rowSums(output_table_max),
-      decreasing=TRUE)
-    )
-   # apply sorting
-  output_table_min <- output_table_min[row_names_min,col_names_min]
-  output_table_max <- output_table_max[row_names_max,col_names_max]
+  output_table_min <- sort_table(output_table_min)
+  output_table_max <- sort_table(output_table_max)
 
   #output as list
   output_table_list = list(min = output_table_min, 
                            max = output_table_max)
+  
   return(output_table_list)
 }
 ```
@@ -1825,24 +1815,9 @@ greek_latin_tables_f <- function(gu_table,gu_table_greek_lists){
       # sum
       gu_table_greek_latin <- gu_table_greek_lists_m[[paste0("it_",i)]] + gu_table
       
-      # sort
-      # col names (occupations, sorted by frequency)
-      col_names <- names(
-        sort(
-          colSums(gu_table_greek_latin),
-          decreasing=TRUE)
-        )
-      
-      # row names (countries, sorted by total counts)
-      row_names <- names(
-        sort(
-          rowSums(gu_table_greek_latin),
-          decreasing=TRUE)
-        )
-      
-      # sort based on row and column counts
-      gu_table_greek_latin <- gu_table_greek_latin[row_names,col_names]
-    
+      # sort 
+      gu_table_greek_latin <- sort_table(gu_table_greek_latin)
+     
       # add to list
       gu_table_greek_latin_list_m[[paste0("it_",i)]] <- gu_table_greek_latin 
     }
@@ -1896,35 +1871,33 @@ This adjustment helps to account for potential differences in the rate of inscri
 We define a function that returns an occupation table with rowsums proportional to the population of a province
 ```{r research core}
 research_correction <- function(occupation_table,minmax){
-  # find names of geographical units
+  # retrieve gu type
+  gu_type <- which_gu(occupation_table)
+  
+  # find names of geographical units (in the same order as they appear in the occupation table)
   gu <- rownames(occupation_table)
-  gu_pop_df <-  provinces_population_df
-  rownames(gu_pop_df) <- gu_pop_df$province
+  
+  # select appropriate population table
+  if (gu_type == "province"){
+      gu_pop_df <-  provinces_population_df
+  } else if (gu_type == "country"){
+    gu_pop_df <-  countries_population_df
+  } # note that if it is neither, the gu_type function will have already stopped the process 
   
   # initialise the output
   if (minmax == "min"){
-      output_table_c <- occupation_table/rowSums(occupation_table)*gu_pop_df[gu,"tot_pop_min"] # ERROR HERE
+      output_table <- occupation_table/rowSums(occupation_table)*gu_pop_df[gu,"tot_pop_min"] # ERROR HERE
   } else if (minmax == "max"){
-      output_table_c <- occupation_table/rowSums(occupation_table)*gu_pop_df[gu,"tot_pop_max"]
+      output_table <- occupation_table/rowSums(occupation_table)*gu_pop_df[gu,"tot_pop_max"]
+  } else {
+    stop("Please input a valid value for minmax: min or max")
   }
   
   # sort
-  # col names (occupations, sorted by frequency)
-  col_names <- names(
-    sort(
-      colSums(output_table_c),
-      decreasing=TRUE)
-    )
-  # row names (geographical units, sorted by total counts)
-  row_names <- names(
-    sort(
-      rowSums(output_table_c),
-      decreasing=TRUE)
-    )
+  output_table <- sort_table(output_table) 
   
-   # apply sorting
-  output_table_c <- output_table_c[row_names,col_names]
-  return(output_table_c)
+  #output
+  return(output_table)
 }
 ```
 
@@ -1942,9 +1915,9 @@ Order to follow:
 ```{r 1. Language}
 # 1. Language
 # select one of the many precomputed ones:
-start_table <- province_table[!rownames(province_table)%in%c("Eastern border","North-eastern border"),]
+start_table <- province_table
 
-table_step_1 <- province_table_greek_latin_list[[1]]
+table_step_1 <- province_table_greek_latin_lists$r_0[[1]]
 
 # delete the border regions (WILL HAVE TO BE DONE FROM THE START LATER ON)
 table_step_1 <- table_step_1[!rownames(table_step_1)%in%c("Eastern border","North-eastern border"),]
