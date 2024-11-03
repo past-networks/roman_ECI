@@ -219,7 +219,6 @@ sort_table <- function(tb, decreasing = TRUE){
 }
 ```
 
-
 # Data preparation -------------------------------------------------------------
 ## Occupational units
 First, select only the inscriptions containing information on occupations
@@ -330,17 +329,20 @@ epitaphs_sf <- st_as_sf(epitaphs,
 
 We consider two sets of geographical units: contemporary countries and ancient Roman provinces (at the time of Trajan).
 
-### Modern countries
+### Inscriptions by modern countries
 #### Functions
+First, find a list of the countries that intersected the Roman Empire
+```{r countries intersection the Roman Empire}
+intersecting_indices <- st_intersects(world_sf, provinces, sparse = FALSE)
+intersecting_countries <- world_sf$iso3[apply(intersecting_indices, 1, any)]
+```
+
 The following function takes the sf of inscriptions and assigns each one to the corresponding (closest) modern country
 ```{r function assigning inscriptions to modern countries}
+# function to assign countries to the Roman Empire
 inscriptions_to_country_f <- function(insc_sf){
   # extract the coordinates
   insc_coordinates <-  data.frame(st_coordinates(insc_sf)) %>% setNames(c("Longitude","Latitude"))
-  
-  # find the countries that intersected the Roman Empire
-  intersecting_indices <- st_intersects(world_sf, provinces, sparse = FALSE)
-  intersecting_countries <- world_sf$iso3[apply(intersecting_indices, 1, any)]
   
   # find closest country
   inscr_closest_country <- world_sf$iso3[st_nearest_feature(insc_sf,world_sf)] 
@@ -435,7 +437,7 @@ greek_inscriptions_in_countries_map <- inscriptions_to_gu_map_f(greek_inscriptio
 plot_and_save(greek_inscriptions_in_countries_map)
 ```
 
-### Roman provinces
+### Inscriptions by roman provinces
 #### Function
 We define an analogous function for assigning inscriptions to ancient Roman provinces (at Trajan's time).
 In this case, a few preliminary notes are needed:
@@ -555,87 +557,6 @@ Find counts of all Latin inscriptions by province RK : CHANGED from all_latin_..
 latin_inscriptions_in_provinces_counts <- table(latin_inscriptions_in_provinces$province)
 ```
 
-# Table of occupations ---------------------------------------------------------
-## Functions
-The following functions receives as input a set of inscriptions with occupations, assigned to geographical units, and outputs the occupation tables by geographical units.
-```{r function for occupation tables}
-table_of_occupations <- function(insc_w_occ){
-  
-  # ensure that the info on geographical unit (gu) is included in the input
-  gu <- which_gu(insc_w_occ)
-
-  # unnest the list of occupations in each inscription (based on the standard occupational terms)
-  insc_w_occ_unnested <- unnest(insc_w_occ,"occups_std")
-  
-    
-  # initialise table
-  occ_table <- table(insc_w_occ_unnested[[gu]],
-                     insc_w_occ_unnested$occups_std)
-
-  # sort the table based on row and column sums
-  occ_table <- sort_table(occ_table)
-  
-  # return occupation table
-  return(occ_table)
-} 
-```
-
-This function takes as input an occupational table and a geographical unit and plots the occupation table as a heatmap TO DO
-```{r function for occupational tables as heatmaps}
-occ_heat_map <- function(occ_table){
-  # retrieve gu type
-  gu <- which_gu(occ_table)
-  
-  # Convert the table to a dataframe
-  occ_table_heatmap <- as.data.frame(occ_table) %>% setNames(c(gu,"occupation","frequency"))
-  occ_table_heatmap$log_frequency <- log(occ_table_heatmap$frequency)
-
-  # prepare the plot
-  occ_table_heatmap_plot <- ggplot(occ_table_heatmap, aes(occupation, !!sym(gu), fill=log_frequency)) + 
-    geom_tile() +
-    scale_fill_gradient(low = "white", high = "red") +
-    labs(x = "occupation", 
-        y = gu, 
-        fill ="log(frequency)",
-        title = paste0("Frequency of occupations in inscriptions by ",gu)) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
-}
-```
-
-## Compute occupational tables 
-We now compute the occupational tables and heat maps for countries and provinces
-```{r compute occupational tables}
-province_table <- table_of_occupations(inscriptions_w_occupations_in_provinces)
-country_table <- table_of_occupations(inscriptions_w_occupations_in_countries)
-```
-
-Plot and save heat maps
-```{r plot and save heatmaps}
-# define heatmaps
-province_table_heatmap <- occ_heat_map(province_table, "province")
-country_table_heatmap <- occ_heat_map(country_table, "country")
-
-# plot and save
-plot_and_save(province_table_heatmap,width = 15, height = 10)
-plot_and_save(country_table_heatmap,width = 15, height = 10)
-```
-
-# Uncertainty and bias mitigation ---------------------------------------------- 
-## Uncertainty intro
-The above tables were constructed by using the occupation data as it was directly extracted from the inscriptions. 
-
-However, inscriptions do not represent a realistic view of the real occupational structure. Sources of bias include:
-* Gender bias: inscriptions in general contain information about men than women. 
-* Research bias: uneven research interest in different occupations and geographical areas, imperfect detection method, etc. 
-* Occupation bias: some occupations are systematically underreported (e.g., farmers)
-* Language bias: the dataset includes only latin inscriptions, but a large number of inscriptions were written in Greek, especially in the Eastern side of the Roman empire. 
-
-In this section we propose to systematically address these biases with the aim to reach more accurate estimates of the real distribution of occupations.
-
-We do this by constructing functions to each source of bias.
-
-## Functions to address bias
 ### Estimate population by geographical unit
 #### Intro
 A major obstacle in reconstructing the occupational structure of the Roman Empire is the lack of precise data on population size and distribution.
@@ -1149,6 +1070,8 @@ for (i in seq_len(n_iter)) {
 #write.csv(provinces_total_population_df,"../../results/economic_complexity/provinces_total_population.csv")
 ```
 
+
+
 #### Ratios population/epitaph
 First, compute the ratios of the people per epitaph by provinces.
 ```{r population/epitaph by province}
@@ -1194,6 +1117,100 @@ ratio_epitaphs_tot_pop_provinces$person_years_per_epitaph_max <- ratio_epitaphs_
 
 It is clear that the number of epitaphs does not correspond to the cumulative population.
 
+# Table of occupations ---------------------------------------------------------
+## Functions
+The following functions receives as input a set of inscriptions with occupations, assigned to geographical units, and outputs the occupation tables by geographical units.
+```{r function for occupation tables}
+table_of_occupations <- function(insc_w_occ){
+  
+  # ensure that the info on geographical unit (gu) is included in the input
+  gu_type <- which_gu(insc_w_occ)
+
+  # create list of geographical units
+  if (gu_type == "province") {
+    gu <- provinces$province
+  } else if (gu_type == "country") {
+    # note that some disputed areas in the intersections are not assigned to any country, hence exclude na
+    gu <- na.omit(unique(intersections$country))
+  } # no need to check for other cases as which_gu already takes care of it
+  
+  # unnest the list of occupations in each inscription (based on the standard occupational terms)
+  insc_w_occ_unnested <- unnest(insc_w_occ,"occups_std")
+  
+  # initialise table
+  occ_table <- table(insc_w_occ_unnested[[gu_type]],
+                     insc_w_occ_unnested$occups_std)
+
+  # add zero rows for gus without inscriptions
+  gu_not_in_occ_table <- gu[!gu%in%insc_w_occ_unnested[[gu_type]]]
+  occ_table_zeros <- matrix(0, nrow= length(gu_not_in_occ_table), ncol = ncol(occ_table))
+  rownames(occ_table_zeros) <- gu_not_in_occ_table
+  occ_table <- rbind(occ_table,occ_table_zeros) %>% as.table()
+
+  # sort the table based on row and column sums
+  occ_table <- sort_table(occ_table)
+  
+  # return occupation table
+  return(occ_table)
+} 
+```
+
+This function takes as input an occupational table and a geographical unit and plots the occupation table as a heatmap TO DO
+```{r function for occupational tables as heatmaps}
+occ_heat_map <- function(occ_table){
+  # retrieve gu type
+  gu <- which_gu(occ_table)
+  
+  # Convert the table to a dataframe
+  occ_table_heatmap <- as.data.frame(occ_table) %>% setNames(c(gu,"occupation","frequency"))
+  occ_table_heatmap$log_frequency <- log(occ_table_heatmap$frequency)
+
+  # prepare the plot
+  occ_table_heatmap_plot <- ggplot(occ_table_heatmap, aes(occupation, !!sym(gu), fill=log_frequency)) + 
+    geom_tile() +
+    scale_fill_gradient(low = "white", high = "red") +
+    labs(x = "occupation", 
+        y = gu, 
+        fill ="log(frequency)",
+        title = paste0("Frequency of occupations in inscriptions by ",gu)) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
+}
+```
+
+## Compute occupational tables 
+We now compute the occupational tables and heat maps for countries and provinces
+```{r compute occupational tables}
+province_table <- table_of_occupations(inscriptions_w_occupations_in_provinces)
+country_table <- table_of_occupations(inscriptions_w_occupations_in_countries)
+```
+
+Plot and save heat maps
+```{r plot and save heatmaps}
+# define heatmaps
+province_table_heatmap <- occ_heat_map(province_table)
+country_table_heatmap <- occ_heat_map(country_table)
+
+# plot and save
+plot_and_save(province_table_heatmap,width = 15, height = 10)
+plot_and_save(country_table_heatmap,width = 15, height = 10)
+```
+
+# Uncertainty and bias mitigation ---------------------------------------------- 
+## Uncertainty intro
+The above tables were constructed by using the occupation data as it was directly extracted from the inscriptions. 
+
+However, inscriptions do not represent a realistic view of the real occupational structure. Sources of bias include:
+* Gender bias: inscriptions in general contain information about men than women. 
+* Research bias: uneven research interest in different occupations and geographical areas, imperfect detection method, etc. 
+* Occupation bias: some occupations are systematically underreported (e.g., farmers)
+* Language bias: the dataset includes only latin inscriptions, but a large number of inscriptions were written in Greek, especially in the Eastern side of the Roman empire. 
+
+In this section we propose to systematically address these biases with the aim to reach more accurate estimates of the real distribution of occupations.
+
+We do this by constructing functions to each source of bias.
+
+## Functions to address bias
 ### Gender bias
 We multiply women-only occupations (which for simplicity we take to be those with female-only names), by a corrective factor, derived from the men/women ratio in funerary inscriptions. 
 ```{r extract info about gender inscriptions}
@@ -1287,6 +1304,7 @@ agricola_correction <- function(occupation_table, p, gu_type){
     stop("please input a valid gu_type")
   }
   rownames(pop) <- pop[[gu_type]]
+  # sort as in the occupation table
   pop <- pop[gu,]
   
   r_min <- pop[gu,"rural_pop_min"]/pop[gu,"tot_pop_min"]
@@ -1397,7 +1415,7 @@ We compute the proportion of occupation-related inscriptions among all Latin ins
 
 First, compute the proportion of occupation-related Latin inscriptions and the number of occupations in each occupation-related inscription
 ```{r analyse occupation-related Latin inscriptions}
-# find theproportion of occupation-related Latin inscriptions of 
+# find the proportion of occupation-related Latin inscriptions of 
 proportion_occupation_related_Latin_inscriptions <- nrow(inscriptions_w_occupations)/nrow(inscriptions)
 
 # retrieve the distribution of the number of occupations per occupation-related Latin inscription 
@@ -1592,7 +1610,7 @@ Note that studies in economic complexity (e.g. Hidalgo) indicate that proximity 
 
 Find surroundings of a geographical unit.
 ```{r surroundings of provinces and countries}
-compute_surroundings <- function(geographical_units, unit_type, max_distance_meters = 100000) {
+compute_surroundings <- function(geographical_units, unit_type, max_distance_meters) {
   
   # Ensure max_distance is in meters and in correct units
   max_distance <- set_units(max_distance_meters, "m")
@@ -1736,8 +1754,12 @@ greek_sample_f <- function(gu_table,
       if (gu %in% occupations_in_greek_inscriptions_in_gu_counts_df[[gu_type]]){
         # extract the info for a gu
         gu_counts <- gu_and_surroundings_table[gu,]
-        # convert into a distribution of occupations. Each occupation appears as many times as the province 
+        
+        # Check that not all values are zero
+        if (sum(gu_counts) > 0){
+           # convert into a distribution of occupations. Each occupation appears as many times as the province 
         gu_distribution <- rep(names(gu_counts),gu_counts)
+      
         # sample
         occupations_sample <- sample(
           gu_distribution,
@@ -1750,6 +1772,8 @@ greek_sample_f <- function(gu_table,
       
         # add to the table
         gu_table_greek[gu,names(occupations_sample_table)] <- occupations_sample_table
+          
+        }
       }
     }
   
@@ -1881,7 +1905,7 @@ research_correction <- function(occupation_table,minmax){
   if (gu_type == "province"){
       gu_pop_df <-  provinces_population_df
   } else if (gu_type == "country"){
-    gu_pop_df <-  countries_population_df
+    gu_pop_df <-  na.omit(countries_population_df)
   } # note that if it is neither, the gu_type function will have already stopped the process 
   
   # initialise the output
