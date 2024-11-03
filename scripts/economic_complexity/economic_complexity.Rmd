@@ -1281,7 +1281,9 @@ other_food_prof_occ <- all_food_prod_occs[!all_food_prod_occs=="agricola"]
 non_food_prod_occ <- occupations_status$std_spelling[!occupations_status$std_spelling %in% all_food_prod_occs]
 
 # ensure parameter p is always slightly below 1 (otherwise divide by inf, but it makes sense logically)
-agricola_correction <- function(occupation_table, p, gu_type){
+agricola_correction <- function(occupation_table, p){
+  # retrieve gu type
+  gu_type <- which_gu(occupation_table)
   
   # find names of geographical units
   gu <- rownames(occupation_table)
@@ -1321,7 +1323,7 @@ agricola_correction <- function(occupation_table, p, gu_type){
   output_table_max <- sort_table(output_table_max)
 
   #output as list
-  output_table_list = list(min = output_table_min, 
+  output_table_list <- list(min = output_table_min, 
                            max = output_table_max)
   
   return(output_table_list)
@@ -1908,11 +1910,13 @@ research_correction <- function(occupation_table,minmax){
     gu_pop_df <-  na.omit(countries_population_df)
   } # note that if it is neither, the gu_type function will have already stopped the process 
   
+  # define 
+  
   # initialise the output
   if (minmax == "min"){
-      output_table <- occupation_table/rowSums(occupation_table)*gu_pop_df[gu,"tot_pop_min"] # ERROR HERE
+      output_table <- occupation_table/pmax(rowSums(occupation_table),1)*gu_pop_df[gu,"tot_pop_min"] # pmax to avoid dividing by 0
   } else if (minmax == "max"){
-      output_table <- occupation_table/rowSums(occupation_table)*gu_pop_df[gu,"tot_pop_max"]
+      output_table <- occupation_table/pmax(rowSums(occupation_table),1)*gu_pop_df[gu,"tot_pop_max"]# pmax to avoid dividing by 0
   } else {
     stop("Please input a valid value for minmax: min or max")
   }
@@ -1925,7 +1929,7 @@ research_correction <- function(occupation_table,minmax){
 }
 ```
 
-## Apply bias correction (in different orders) ONGOING
+## Apply bias correction 
 ### Bias correction for the province table.
 Order to follow:
 1. Language
@@ -1935,152 +1939,53 @@ Order to follow:
 5. Research bias NEW
 
 #### Simple Example
-##### 1. Language
-```{r 1. Language}
-# 1. Language
-# select one of the many precomputed ones:
+```{r apply corrections}
+# original table 
 start_table <- province_table
 
-table_step_1 <- province_table_greek_latin_lists$r_0[[1]]
+# language bias
+table_step_1 <- province_table_greek_latin_lists$r_500[[1]]
 
-# delete the border regions (WILL HAVE TO BE DONE FROM THE START LATER ON)
-table_step_1 <- table_step_1[!rownames(table_step_1)%in%c("Eastern border","North-eastern border"),]
-```
+# delete rows which sum to zero (for computation of complexity)
+start_table_no_zeros <- start_table[rowSums(start_table)>0,]
+table_1_no_zeros <- table_step_1[rowSums(table_step_1)>0,]
 
-##### 2. Status bias
-```{r}
-table_step_2_min <- status_bias_correction_stochastic(table_step_1,3,5,1)[[1]]
-```
+# status bias
+table_step_2_min <- status_bias_correction_stochastic(table_1_no_zeros,3,5,1)[[1]]
 
-##### 3. Gender
-```{r}
+# gender bias
 table_step_3_min <- gender_bias(table_step_2_min,gender_ratio_v[1])
-```
 
-##### 4. Agricola
-```{r apply correction on agricola}
+# agricola bias
 table_step_4_min <- agricola_correction(table_step_3_min,0.95)$min
-#write.csv(table_step_4_min,"../../results/economic_complexity/table_step_4_min.csv")
 
-#write.csv(start_table,"../../results/economic_complexity/start_table.csv")
+# research bias
+table_step_5_min <- research_correction(table_step_4_min,"min")
 ```
 
-##### 5. Research bias
-Ensure occupation-related inscriptions are proportional to population
-```{r multiply so that it is proportional to population}
-# isolate total population
-provinces_population_df_2 <- provinces_population_df
-rownames(provinces_population_df_2) <- provinces_population_df_2$province
+Define and plot the heatmaps at each stage
+```{r Heat maps of example}
+# compute heatmaps
+start_table_no_zeros_hm <- occ_heat_map(start_table_no_zeros)
+table_1_no_zeros_hm <- occ_heat_map(table_1_no_zeros)
+table_step_2_min_hm <- occ_heat_map(table_step_2_min)
+table_step_3_min_hm <- occ_heat_map(table_step_3_min)
+table_step_4_min_hm <- occ_heat_map(table_step_4_min)
+table_step_5_min_hm <- occ_heat_map(table_step_5_min)
 
-# rescale by total population
-table_step_5_min <- table_step_4_min/rowSums(table_step_4_min)*provinces_population_df_2[rownames(table_step_4_min),"tot_pop_min"]
-
-# sort (TRANSFORM INTO FUNCTION)
- # sort
-  # col names (occupations, sorted by frequency)
-  col_names <- names(
-    sort(
-      colSums(table_step_5_min),
-      decreasing=TRUE)
-    )
-  # row names (geographical units, sorted by total counts)
-  row_names <- names(
-    sort(
-      rowSums(table_step_5_min),
-      decreasing=TRUE)
-    )
-  
-   # apply sorting
-  table_step_5_min <- table_step_5_min[row_names,col_names]
-```
-
-
-##### Heatmaps
-First, let us plot the heat map of the original data.
-```{r heat map of original data}
-start_table_heatmap <- as.data.frame(start_table) %>% setNames(c("province","occupation","frequency"))
-start_table_heatmap$log_frequency <- log(start_table_heatmap$frequency)
-
-start_table_heatmap_plot <- ggplot(start_table_heatmap, aes(occupation, province, fill=log_frequency)) + 
-  geom_tile() +
-  scale_fill_gradient(low = "white", high = "red") +
-  labs(x = "occupation", 
-       y = "province", 
-       fill ="log(frequency)",
-       title = "Frequency of occupations in inscriptions by province") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
-
-print(start_table_heatmap_plot)
-```
-
-Then, 
-```{r heatmap of table 1 (after language correction)}
-table_step_1_min_heatmap <- as.data.frame(table_step_1) %>% setNames(c("province","occupation","frequency"))
-table_step_1_min_heatmap$log_frequency <- log(table_step_1_min_heatmap$frequency)
-
-table_step_1_min_heatmap_plot <- ggplot(table_step_1_min_heatmap, aes(occupation, province, fill=log_frequency)) + 
-  geom_tile() +
-  scale_fill_gradient(low = "white", high = "red") +
-  labs(x = "occupation", 
-       y = "province", 
-       fill ="log(frequency)",
-       title = "Frequency of occupations in inscriptions by province") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
-
-print(table_step_1_min_heatmap_plot)
-```
-
-```{r heatmap of the final data}
-table_step_5_min_heatmap <- as.data.frame(table_step_5_min) %>% setNames(c("province","occupation","frequency"))
-table_step_5_min_heatmap$log_frequency <- log(table_step_5_min_heatmap$frequency)
-
-table_step_5_min_heatmap_plot <- ggplot(table_step_5_min_heatmap, aes(occupation, province, fill=log_frequency)) + 
-  geom_tile() +
-  scale_fill_gradient(low = "white", high = "red") +
-  labs(x = "occupation", 
-       y = "province", 
-       fill ="log(frequency)",
-       title = "Frequency of occupations in inscriptions by province") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
-
-print(table_step_5_min_heatmap_plot)
-```
-
-```{r heatmap of the final data ALTERNATIVE}
-table_step_6_min_heatmap <- as.data.frame(table_step_6_min) %>% setNames(c("province","occupation","frequency"))
-table_step_6_min_heatmap$log_frequency <- log(table_step_6_min_heatmap$frequency)
-
-table_step_6_min_heatmap_plot <- ggplot(table_step_6_min_heatmap, aes(occupation, province, fill=log_frequency)) + 
-  geom_tile() +
-  scale_fill_gradient(low = "white", high = "red") +
-  labs(x = "occupation", 
-       y = "province", 
-       fill ="log(frequency)",
-       title = "Frequency of occupations in inscriptions by province") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1,size = 2))
-
-print(table_step_6_min_heatmap_plot)
-```
-
-```{r study change in rank}
-a <- numeric(54)
-for (i in 1:54){
-  a[i] <- which(rownames(start_table)==rownames(table_step_6_min)[i])
-}
-
-change_in_rank_df <- data.frame(province = rownames(table_step_6_min),
-                                old_rank = a,
-                                new_rank = 1:54,
-                                change_in_rank = a-1:54)
+#plot and save
+plot_and_save(start_table_no_zeros_hm, width = 15, height = 10)
+plot_and_save(table_1_no_zeros_hm, width = 15, height = 10)
+plot_and_save(table_step_2_min_hm, width = 15, height = 10)
+plot_and_save(table_step_3_min_hm, width = 15, height = 10)
+plot_and_save(table_step_4_min_hm, width = 15, height = 10)
+plot_and_save(table_step_5_min_hm, width = 15, height = 10)
 ```
 
 #### Generate tables with probabilities
 We apply the bias correction stategies also accounting for the uncertainty they entail.
 We let:
+* m    be the maximum distance threshold for the language bias TO DO
 * l_it be the iterator for the language bias
 * s_it be the iterator for the status bias
 * g_it be the iterator for the gender bias
