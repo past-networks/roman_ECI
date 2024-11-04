@@ -1,3 +1,5 @@
 !/.gitignore
 /data/large_data/
 .Rproj.user
+.RData
+scripts/data_exploration/LISTsmall.json
