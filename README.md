@@ -1,16 +1,14 @@
-# Economic diversity and labour specialization in the Latin-speaking Roman Empire
+# Economic complexity in the Roman Empire
 
 ## About
-[_In two to three sentences state the purpose of this repository, e.g., The purpose of this repository is to provide templates for all future PSN repositories in order to save precious time and maintain high standards and uniformity of our documentation._]
+[_Project exploring the economic complexity of the Roman Empire on the basis of mentions of occupations on Latin inscriptions._]
 
 ## Authors 
 
-* Petra Hermankova [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-6349-0540), PSN, Aarhus University
 * Matteo Mazzamurro [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0009-0004-4454-1551), PSN, Aarhus University
+* Petra Hermankova [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-6349-0540), PSN, Aarhus University
+* Michele Coscia [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0001-5984-5137), IT University of Copenhagen
 * Tom Brughmans [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-1589-7768), PSN, Aarhus University
-* Vojtech Kase [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-6601-1605), SDAM project, kase@kfi.zcu.cz
-* Adela Sobotkova [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-4541-3963), SDAM project, adela@cas.au.dk
-* [Name], [ORCID], [Institution]
 
 ## Funding
 *The Past Social Networks Projects* is funded by The Carlsberg Foundation’s Young Researcher Fellowship (CF21-0382) in 2022-2026.
@@ -29,7 +27,7 @@ CC-BY-SA 4.0, see attached [License.md](./License.md)
 
 2. Geographic units data to compute economic complexity
 - countries: download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp
-- provinces: shapefile created by Adam Pažout
+- provinces: shapefile created by Adam Pažout on the basis of [TBD]
 
 ## Scripts
 [_Describe what individual scripts do, provide links to them, and order them in a sequence they should run. Point to any issues or specific settings people should be aware of._]
