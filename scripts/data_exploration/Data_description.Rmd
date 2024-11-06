@@ -92,6 +92,21 @@ LISTall %>%
 # typos in the data!!!
 
 ```
+# Types of inscriptions
+
+```{r}
+LIST %>% 
+  select(type_of_inscription_auto, ) %>% 
+  unlist() %>% 
+  table()
+
+# 189639 epitaphs = 
+
+189639 / (nrow(LIST) / 100)
+
+
+```
+
 
 # Occupational subset
 
