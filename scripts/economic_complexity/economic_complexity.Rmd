@@ -138,13 +138,28 @@ cities <- st_read("../../data/economic_complexity/roman_cities_pop.geojson")
 # Roman provinces (digitised and corrected by Adam Pažout)
 ## read the data
 provinces <- read_sf("../../data/economic_complexity/roman_provinces_cleaned/roman_provinces_foranalysisdissolved.shp")
+## drop z geometry
+provinces <- st_zm(provinces, drop = TRUE, what = "ZM")
 ## transform it in a relevant coordinate reference system
 provinces <- st_transform(provinces, crs=crs("epsg:4326"))
 ## delete Roma since it lies inside Latium
 provinces <- provinces[!provinces$province=="Roma",]
 ## delete unnecessary columns for our scopes
 provinces <- provinces[,c("province","geometry")]
-D
+
+#alternative
+provinces_2 <- read_sf("C:/Users/au732923/Downloads/roman_provinces_modified_2.shp")
+## drop z geometry
+provinces_2 <- st_zm(provinces_2, drop = TRUE, what = "ZM")
+## transform it in a relevant coordinate reference system
+provinces_2 <- st_transform(provinces_2, crs=crs("epsg:4326"))
+## delete Roma since it lies inside Latium
+provinces_2 <- provinces_2[!provinces_2$province=="Roma",]
+## delete unnecessary columns for our scopes
+provinces_2 <- provinces_2[,c("province","geometry")]
+## sort alphabetically
+provinces_2 <- provinces_2[order(provinces_2$province),]
+
 # country borders
 ## read the data from local path. Need to download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp 
 world_sf <- read_sf('../../data/economic_complexity/world-administrative-boundaries/world-administrative-boundaries.shp') 
@@ -157,13 +172,13 @@ Create the following function to plot and save a ggplot as pdf and png
 ```{r function to print and save ggplots}
 plot_and_save <-  function(ggp, title=deparse(substitute(ggp)), width = 7, height = 5.5){
   # print the plot
-  print(ggp)
+  #print(ggp)
   
   # save the plot (deafault title is the name of the file)
   ggsave(paste0("../../figures/economic_complexity/",title,".pdf"), 
          ggp, width = width, height = height)
-  ggsave(paste0("../../figures/economic_complexity/",title,".jpeg"), 
-         ggp, width = width, height = height, dpi = 300)
+  #ggsave(paste0("../../figures/economic_complexity/",title,".jpeg"), 
+  #       ggp, width = width, height = height, dpi = 300)
 }
 ```
 
@@ -437,6 +452,19 @@ greek_inscriptions_in_countries_map <- inscriptions_to_gu_map_f(greek_inscriptio
 plot_and_save(greek_inscriptions_in_countries_map)
 ```
 
+Count them
+```{r counts of inscriptions by countries}
+# all latin inscriptions
+n_latin_inscriptions_in_countries <- latin_inscriptions_in_countries$country %>% 
+  table() %>% data.frame() %>% setNames(c("country","n_latin_inscriptions"))
+# latin inscriptions with occupations
+n_inscriptions_w_occupations_in_countries <- inscriptions_w_occupations_in_countries$country %>% 
+  table() %>% data.frame() %>% setNames(c("country","n_inscriptions_w_occupations"))
+# greek inscriptions 
+n_greek_inscriptions_in_countries <- greek_inscriptions_in_countries$country %>% 
+  table() %>% data.frame() %>% setNames(c("country","n_greek_inscriptions"))
+```
+
 ### Inscriptions by roman provinces
 #### Function
 We define an analogous function for assigning inscriptions to ancient Roman provinces (at Trajan's time).
@@ -553,8 +581,16 @@ plot_and_save(greek_inscriptions_in_provinces_map)
 ```
 
 Find counts of all Latin inscriptions by province RK : CHANGED from all_latin_...
-```{r count of inscriptions by province}
-latin_inscriptions_in_provinces_counts <- table(latin_inscriptions_in_provinces$province)
+```{r counts of inscriptions by province}
+# all latin inscriptions
+n_latin_inscriptions_in_provinces <- latin_inscriptions_in_provinces$province %>% 
+  table() %>% data.frame() %>% setNames(c("province","n_latin_inscriptions"))
+# latin inscriptions with occupations
+n_inscriptions_w_occupations_in_provinces <- inscriptions_w_occupations_in_provinces$province %>% 
+  table() %>% data.frame() %>% setNames(c("province","n_inscriptions_w_occupations"))
+# greek inscriptions 
+n_greek_inscriptions_in_provinces <- greek_inscriptions_in_provinces$province %>% 
+  table() %>% data.frame() %>% setNames(c("province","n_greek_inscriptions"))
 ```
 
 ### Estimate population by geographical unit
@@ -847,6 +883,15 @@ provinces_population_df <-
 rownames(provinces_population_df) <- provinces_population_df$province 
 ```
 
+Then compute the ratios of rural population
+```{r rural population ratios in provinces}
+provinces_rural_pc_df <- data.frame(
+  province = provinces_population_df$province,
+  "min" = provinces_population_df$rural_pop_min/provinces_population_df$tot_pop_min,
+  "max" = provinces_population_df$rural_pop_max/provinces_population_df$tot_pop_max
+)
+```
+
 Finally save these results.
 ```{r save population by province as csv}
 #write.csv(provinces_macroregions_full_info_df,
@@ -998,7 +1043,11 @@ countries_population_df <-  intersections_pop_full_info_df %>%
             rural_pop_max = sum(intersection_rural_pop_max),
             tot_pop_min = sum(intersection_tot_pop_min),
             tot_pop_max = sum(intersection_tot_pop_max)) %>%
-  as.data.frame
+  as.data.frame() %>%
+  na.omit()
+
+
+rownames(countries_population_df) <- countries_population_df$country
 
 # check validity of grand total
 (sum(provinces_macroregions_full_info_df$tot_pop_min) == sum(countries_population_df$tot_pop_min) && sum(provinces_macroregions_full_info_df$tot_pop_max) == sum(countries_population_df$tot_pop_max)) 
@@ -1008,6 +1057,15 @@ countries_population_df <-  intersections_pop_full_info_df %>%
 #          "../../results/economic_complexity/countries_population.csv")
 #write.csv(intersections_pop_full_info_df,
 #          "../../results/economic_complexity/intersections_population_full_info.csv")
+```
+
+Then compute the ratios of rural population
+```{r rural population ratios in countries}
+countries_rural_pc_df <- data.frame(
+  country = countries_population_df$country,
+  "min" = countries_population_df$rural_pop_min/countries_population_df$tot_pop_min,
+  "max" = countries_population_df$rural_pop_max/countries_population_df$tot_pop_max
+) %>% na.omit()
 ```
 
 #### Total number of person-years in each province
@@ -1273,6 +1331,10 @@ Then the above assumption translates into the following simple equation: a+f = p
 which yields a = dpr/(1-pr)-f.
 RK: when p=1, 1-pr=u, where u is the urban population, so a=dr/u-f
 
+Note that since r is itself uncertain within a range (r_min,r_max), we define a further parameter "s" between 0 and 1 and interpolate between the min and max values. 
+The proportion r of rural population is then calculated as: 
+r = (1-s)r_min+(s)r_max
+
 #### Implementation
 Implement the above formula as an algorithm
 ```{r function to expand the count of "agricola" in the table}
@@ -1281,16 +1343,15 @@ other_food_prof_occ <- all_food_prod_occs[!all_food_prod_occs=="agricola"]
 non_food_prod_occ <- occupations_status$std_spelling[!occupations_status$std_spelling %in% all_food_prod_occs]
 
 # ensure parameter p is always slightly below 1 (otherwise divide by inf, but it makes sense logically)
-agricola_correction <- function(occupation_table, p){
+agricola_correction <- function(occupation_table, p, s){
   # retrieve gu type
   gu_type <- which_gu(occupation_table)
   
   # find names of geographical units
   gu <- rownames(occupation_table)
   
-  # initialise the outputs: two output tables, one with the minimum and one with the maximum estimates
-  output_table_min <- occupation_table
-  output_table_max <- occupation_table
+  # initialise the output
+  output_table <- occupation_table
   
   # define the equation variables
   f <- rowSums(occupation_table[,other_food_prof_occ])
@@ -1298,10 +1359,10 @@ agricola_correction <- function(occupation_table, p){
   
   # info on population
   if (gu_type == "province") {
-    pop <- provinces_population_df
+    pop <- provinces_rural_pc_df
   } else if (gu_type == "country") {
     # note that a few hundred people are not associated with any country, hence the na.omit is necessary
-    pop <- na.omit(countries_population_df)
+    pop <- na.omit(countries_rural_pc_df)
   } else {
     stop("please input a valid gu_type")
   }
@@ -1309,24 +1370,21 @@ agricola_correction <- function(occupation_table, p){
   # sort as in the occupation table
   pop <- pop[gu,]
   
-  r_min <- pop[gu,"rural_pop_min"]/pop[gu,"tot_pop_min"]
-  r_max <- pop[gu,"rural_pop_max"]/pop[gu,"tot_pop_max"]
-  a_min <- apply(cbind(d*p*r_min/(1-p*r_min)-f,occupation_table[,"agricola"]),1,max) # to ensure that we do not go below what is recorded
-  a_max <- apply(cbind(d*p*r_max/(1-p*r_max)-f,occupation_table[,"agricola"]),1,max) # to ensure that we do not go below what is recorded
-
-  # update tables
-  output_table_min[,"agricola"] <- a_min
-  output_table_max[,"agricola"] <- a_max
+  # retrieve the proportion of rural population
+  r_min <- pop[gu,"min"]
+  r_max <- pop[gu,"max"]
+  r <- (1-s)*r_min+s*r_max
   
+  # compute number of agricola
+  a <- apply(cbind(d*p*r/(1-p*r)-f,occupation_table[,"agricola"]),1,max) # to ensure that we do not go below what is recorded
+
+  # update table
+  output_table[,"agricola"] <- a
+
   # sort
-  output_table_min <- sort_table(output_table_min)
-  output_table_max <- sort_table(output_table_max)
-
-  #output as list
-  output_table_list <- list(min = output_table_min, 
-                           max = output_table_max)
+  output_table <- sort_table(output_table)
   
-  return(output_table_list)
+  return(output_table)
 }
 ```
 
@@ -1349,8 +1407,13 @@ For each Harris Category, we count the co-occurrence of references to elite/non-
 We then compute how commonly elite/non-elite people were employed in a given category (e.g., 10% of non-elite people were employed in clothing-related occupations, but only 1% of elite people were). 
 This allows us to determine whether a category was mostly an elite or non-elite one.
 
-We use this information to inflate the counts of occupations in categories dominated by non-elites by a fixed factor, which we arbitrarily fix as between 1 (no inflation) and 5 times with a mean of 3.
-Rk: These factors are arbitrary because we do no know exactly how many people were elite or non-elite in Ancient Rome, with estimates of 10000 senators and equites and 200-400k military personnel in a total of 60 million people cited by Wikipedia, which would imply that a huge corrective factor is needed.
+We use this information to inflate the counts of occupations in categories dominated by non-elites by a fixed factor.
+Scheidel and Friesen (2007) proposed that the élite population (including the military) constituted about 3% of the population. 
+If we exclude the farmers (who almost do not appear in the inscription data), we have between 13.6 and 16.2 percent of the population left (see agricola correction). 
+Hence the expected ratio of non-elites to elites is between 3.5 and 4.4, which requires a correction factor between 20.475 and 25.74. 
+To allow for uncertainty in the estimates, we select our corrective factor in the range 15 to 30, with a mean of 22.5.
+
+Rk: These factors are arbitrary because we do no know exactly how many people were elite or non-elite in Ancient Rome.
 A more careful approach would involve assuming simplistically that if one had status, then they would include it in the inscriptions, and thus assuming that those who did not indicate their status were probably non-elites. This would be roughly 3/4 of the total.
 
 #### Implementation
@@ -1371,7 +1434,7 @@ occupations_status <- occupations_status[occupations_status$std_spelling %in% co
 non_elite_occupations <- occupations_status$std_spelling[!occupations_status$elite]
 ```
 
-Define a function to inflate the non-elite occupation coutns by a corrective factor
+Define a function to inflate the non-elite occupation counts by a corrective factor
 ```{r function to inflate a table by a given value}
 status_bias_correction <- function(occupation_table, corrective_factor){
   output_table <- occupation_table
@@ -1382,22 +1445,36 @@ status_bias_correction <- function(occupation_table, corrective_factor){
 
 Sample the corrective factor from a certain interval and output several estimates of corrections
 ```{r sample the corrective factor output several corrections}
-status_bias_correction_stochastic <- function(occupation_table, cf_min, cf_max, n_samples){
+status_bias_correction_stochastic <- function(occupation_table, 
+                                              cf_min, 
+                                              cf_max,  
+                                              cf_mode=(cf_min+cf_max)/2, 
+                                              n_samples){
   # initialise empty list
   output_table_list <- list()
   
   # set for reproducibility
   set.seed(123)
   
+  # check that input values are valid
+  if (cf_min>cf_mode|cf_min>cf_max|cf_mode>cf_max){
+    stop("Provice valid values for the corrective factors cf_min, cf_max, and cf_mode (if specified), so that cf_min<=cf_mode<=cf_max")
+  }
+  
   # sample corrective factors from triangular distribution
   corrective_factors <- rtri(n = n_samples,
                        min = cf_min,
                        max = cf_max,
-                       mode = (cf_min+cf_max)/2)
+                       mode = cf_mode)
   
   # fill list with each corrective factor
   for (i in seq_len(n_samples)){
-    output_table_list[[i]] <- status_bias_correction(occupation_table,corrective_factors[i])
+    # adjust
+    output_table_i <- status_bias_correction(occupation_table,corrective_factors[i])
+    # sort
+    output_table_i <- output_table_i %>% sort_table()
+    # store
+    output_table_list[[i]] <- output_table_i
   }
   
   return(output_table_list)
@@ -1667,7 +1744,7 @@ surrounding_countries_list <- list()
 surrounding_provinces_list <- list()
 
 # define a vector of distance thresholds
-max_distances <- c(0, 100,1000, 5000)
+max_distances <- c(0, 0.001, 100,1000, 5000)
 
 # for each threshold, compute the surrounding countries
 for(m in max_distances){
@@ -1895,8 +1972,13 @@ The final step is to recalibrate the total number of occupations across all prov
 This adjustment helps to account for potential differences in the rate of inscription production across various geographical units and corrects for biases arising from the uneven extent of archaeological excavations in different regions of the Roman Empire.
 #### Implementation
 We define a function that returns an occupation table with rowsums proportional to the population of a province
-```{r research core}
-research_correction <- function(occupation_table,minmax){
+```{r research correction}
+research_correction <- function(occupation_table,p){
+  # check validity of parameter p
+  if (p<0|p>1){
+    stop("p must be between 0 and 1")
+  }
+  
   # retrieve gu type
   gu_type <- which_gu(occupation_table)
   
@@ -1905,21 +1987,16 @@ research_correction <- function(occupation_table,minmax){
   
   # select appropriate population table
   if (gu_type == "province"){
-      gu_pop_df <-  provinces_population_df
+    gu_pop_df <-  provinces_population_df
   } else if (gu_type == "country"){
     gu_pop_df <-  na.omit(countries_population_df)
   } # note that if it is neither, the gu_type function will have already stopped the process 
   
-  # define 
+  # compute corrective factor ((1-p)*pop_min + p*pop_max), with 0<=p<=1
+  gu_pop_correction_df <- (1-p)*gu_pop_df[gu,"tot_pop_min"]+p*gu_pop_df[gu,"tot_pop_max"]
   
   # initialise the output
-  if (minmax == "min"){
-      output_table <- occupation_table/pmax(rowSums(occupation_table),1)*gu_pop_df[gu,"tot_pop_min"] # pmax to avoid dividing by 0
-  } else if (minmax == "max"){
-      output_table <- occupation_table/pmax(rowSums(occupation_table),1)*gu_pop_df[gu,"tot_pop_max"]# pmax to avoid dividing by 0
-  } else {
-    stop("Please input a valid value for minmax: min or max")
-  }
+  output_table <- occupation_table/pmax(rowSums(occupation_table),1)*gu_pop_correction_df # pmax to avoid dividing by 0
   
   # sort
   output_table <- sort_table(output_table) 
@@ -1946,21 +2023,21 @@ start_table <- province_table
 # language bias
 table_step_1 <- province_table_greek_latin_lists$r_500[[1]]
 
-# delete rows which sum to zero (for computation of complexity)
+# delete rows which sum to zero (for computation of complexity) fk 
 start_table_no_zeros <- start_table[rowSums(start_table)>0,]
 table_1_no_zeros <- table_step_1[rowSums(table_step_1)>0,]
 
 # status bias
-table_step_2_min <- status_bias_correction_stochastic(table_1_no_zeros,3,5,1)[[1]]
+table_step_2 <- status_bias_correction_stochastic(table_1_no_zeros,15,30,n_samples=1)[[1]]
 
 # gender bias
-table_step_3_min <- gender_bias(table_step_2_min,gender_ratio_v[1])
+table_step_3 <- gender_bias(table_step_2,gender_ratio_v[1])
 
 # agricola bias
-table_step_4_min <- agricola_correction(table_step_3_min,0.95)$min
+table_step_4_min <- agricola_correction(table_step_3,0.95,0)
 
 # research bias
-table_step_5_min <- research_correction(table_step_4_min,"min")
+table_step_5_min <- research_correction(table_step_4_min,0)
 ```
 
 Define and plot the heatmaps at each stage
@@ -1982,8 +2059,102 @@ plot_and_save(table_step_4_min_hm, width = 15, height = 10)
 plot_and_save(table_step_5_min_hm, width = 15, height = 10)
 ```
 
+Complexity  example (to delete before release)
+```{r}
+# in steps
+t0_compl <- economic_complexity(start_table_no_zeros)
+t1_compl <- economic_complexity(table_1_no_zeros)
+t2_compl <- economic_complexity(table_step_2_min)
+t3_compl <- economic_complexity(table_step_3_min)
+t4_compl <- economic_complexity(table_step_4_min)
+t5_compl <- economic_complexity(table_step_5_min)
+
+# from 0
+t0_t2_compl <- economic_complexity(
+  status_bias_correction_stochastic(start_table_no_zeros,15,30,100)[[1]]
+)
+t0_t3_compl <- economic_complexity(
+   gender_bias(start_table_no_zeros,gender_ratio_v[1])
+)
+t0_t4_compl <- economic_complexity(
+ agricola_correction(start_table_no_zeros,0.95)$min
+)
+t0_t5_compl <- economic_complexity(
+  research_correction(start_table_no_zeros,"min")
+)
+
+# in steps
+t_eci <- t0_compl$eci %>% 
+  full_join(t1_compl$eci, join_by(province)) %>%
+  full_join(t2_compl$eci, join_by(province)) %>%
+  full_join(t3_compl$eci, join_by(province)) %>%
+  full_join(t4_compl$eci, join_by(province)) %>%
+  full_join(t5_compl$eci, join_by(province)) %>% 
+  setNames(c("province",paste0("eci_",0:5)))
+
+# from 0
+t_eci_0 <- t0_compl$eci %>% 
+  full_join(t1_compl$eci, join_by(province)) %>%
+  full_join(t0_t2_compl$eci, join_by(province)) %>%
+  full_join(t0_t3_compl$eci, join_by(province)) %>%
+  full_join(t0_t4_compl$eci, join_by(province)) %>%
+  full_join(t0_t5_compl$eci, join_by(province)) %>% 
+  setNames(c("province",paste0("eci_",0:5)))
+
+cor(t_eci[,2:7],method= "spearman")
+cor(na.omit(t_eci_0[,2:7]),method= "spearman")
+# The most impactful steps are the language (1st), agricola (4th), and population (5th). Status and gender have very little effect
+
+# quick map
+b<-left_join(provinces,t_eci)
+b <- st_zm(b, drop = TRUE, what = "ZM")
+
+a <- ggplot(data = b[,c("geometry","eci_0","eci_2")]) +
+  geom_sf(aes(fill = rank(eci_0))) +
+  scale_fill_gradient(low = "white", high = "red", name = "Value") +
+  theme_minimal() +
+  labs(title = "eci_0")
+
+a<-economic_complexity(table_step_5_min)
+
+b<-left_join(provinces,a$eci)
+b <- st_zm(b, drop = TRUE, what = "ZM")
+
+c <- ggplot(data = b) +
+  geom_sf(aes(fill = rank(eci))) +
+  scale_fill_gradient(low = "white", high = "red", name = "Value") +
+  theme_minimal() +
+  labs(title = "eci")
+
+
+
+```
+
+```{r}
+a<-status_bias_correction_stochastic(start_table_no_zeros,15,30,n_samples=100)
+b <- numeric(100)
+for (i in seq_len(100)) {
+  d <- a[[i]]
+  b[i] <- sum(d[,"medicus"])
+}
+doctors_per_person <- mean(b)/(sum(provinces_total_population_df$tot_pop_max_grand_total)/30/max(provinces_total_population_df$iter))
+# average of 0.6 doctor per 10,000 people, 2/3 of the poorest countries in the world right now, with a similar GDP per capita as the Roman empire
+ecis <- t0_compl$eci
+for (i in seq_len(100)) {
+  eci_i <- economic_complexity(a[[i]])$eci
+  ecis <- full_join(ecis, eci_i, join_by(province))
+  print(i)
+}
+colnames(ecis) <- c("province",paste0("eci_",0:100))
+ecis$mean <- rowMeans(ecis[,3:102])
+cor(ecis$eci_0,ecis$mean,method="spearman")
+cor(ecis$eci_0,ecis[,3:102],method="spearman")
+```
+
+
+
 #### Generate tables with probabilities
-We apply the bias correction stategies also accounting for the uncertainty they entail.
+We apply the bias correction strategies also accounting for the uncertainty they entail.
 We let:
 * m    be the maximum distance threshold for the language bias TO DO
 * l_it be the iterator for the language bias
@@ -1993,6 +2164,7 @@ We let:
 
 ```{r bias-corrected df of tables with probabilities}
 # set number of iterations
+m <- max_distances
 l_it_n <- 10
 s_it_n <- 5 
 g_it_n <- 5  # up to 1000
@@ -2151,13 +2323,14 @@ economic_complexity <- function(mat){
   
   # Compute tables for export
   {
+    # identify gu_type
+    gu_type <- which_gu(mat)
+    
     # Create the pci DataFrame 
-    pci_df <- data.frame("occupation" = colnames(M_cp), 
-                         "pci"= pci)
+    pci_df <- data.frame(colnames(M_cp), pci) %>% setNames(c("occupation","pci"))
     
     # Create the eci DataFrame
-    eci_df <- data.frame("province" = rownames(M_cp),
-                         "eci" = eci)
+    eci_df <- data.frame(rownames(M_cp), eci) %>% setNames(c(gu_type,"eci"))
     
     # pci and eci gets standardized with the same strategy described in the Atlas of Economic Complexity
     pci_df["pci"] = (pci_df["pci"] - mean(pci_df[["pci"]])) / sd(pci_df[["pci"]])
