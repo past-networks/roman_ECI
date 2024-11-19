@@ -36,9 +36,10 @@ occups <- read_tsv("../../../data/Occupations_GREEK.tsv")
 
 ```
 
-# Finding occupations
+# Detecting occupations
 
-```{r}
+## Lemmatized text
+```{r,finding occupations function}
 # Helper function to escape special characters in regex patterns
 escape_special_chars <- function(occupation) {
   # Escape regex special characters
@@ -64,28 +65,173 @@ find_occupations <- function(text, occupations) {
 
 ```
 
-```{r}
-GISTsample <- head(GIST, 100)
+```{r, testing the methods on 1000 inscriptions}
+
+GISTsample <- head(GIST, 1000)
+
+GISTsample$occups <- lapply(GISTsample$lemmata, find_occupations, occupations = occups$Term)
+
+GISTsample %>%
+  unnest(occups) %>%
+  count(occups, sort=T)
+
+GISTsample %>% 
+  filter(!is.na(occups)) -> eval_sample
+
+```
+
+```{r, detection methods evaluation 1 by 1}
+eval_sample %>% 
+  filter(PHI_ID == 1350) -> inscription 
+pattern <- "ποιμήν"
+  
+sapply(inscription$lemmata, function(lemmata) {
+  any(sapply(lemmata, function(pattern) str_detect(inscription, pattern)))
+})
+
+
+```
+
+```{r, detection methods evaluation manual OUT}
+eval_sample %>% 
+  unnest(occups) %>% 
+  select(PHI_ID, reference, occups)  -> manual_eval
+
+write_csv(manual_eval, "manual_eval_detection_method_1000_OUT.csv")
+
 ```
 
 
-```{r}
-# Apply the function to each row in the 'text' column
+Out of 1000 inscriptions, 29 had at least one occupation detected, 33 instances of occupations. More than 50% of the detected occupations is wrongly assigned. 
+
+```{r, detection methods evaluation manual IN}
+eval_done<- read_csv("manual_eval_detection_method_1000_IN.csv")
+
+eval_done %>% 
+  count(correct) %>% 
+  mutate(ratio = n/(nrow(eval_done)/100))
+```
+
+
+```{r, full corpus detection}
+# takes few hours to run, 15:56 - 
+
+# Apply the detection function to each row in the 'text' column
 GIST$occups <- lapply(GIST$lemmata, find_occupations, occupations = occups$Term)
 
-#GIST %>%
+GIST %>%
   unnest(occups) %>%
   count(occups, sort=T)
 
 ```
-```{r}
+
+```{r, exploring the results in the entire corpus}
 GIST %>% 
   filter(!is.na(occups)) %>% 
   unnest(occups) %>% 
   count(occups, sort=T)
-# 4624 inscriptions with at least one occupation
-# 5389 occurrences of occupation
-# 151 unique occupations
+# 4624 > 4655 inscriptions with at least one occupation
+# 5389 > 5424 occurrences of occupation
+# 151 > 158 unique occupations
 ```
 
+Control for problematic lemmata
+Inhabitatnt of Halai deme Ἁλαιεὺς vs fisherman ἁλιεύς
+ 
+```{r, exploring problematic lemmata 1}
+GIST %>% 
+  #filter(occups %in% "ἁλιεύς") 
+  filter(clean_text_interpretive_word %in% str_subset(clean_text_interpretive_word, "Ἁλαιεὺς|Ἁλαιεύς")) 
+GIST %>% 
+  filter(clean_text_interpretive_word %in% str_subset(clean_text_interpretive_word, "ἁλιεύς"))
+
+```
+
+```{r, fixing problematic lemmata ad-hoc}
+GISTfix <-GIST %>% 
+  filter(!clean_text_interpretive_word %in% str_subset(clean_text_interpretive_word, "Ἁλαιεὺς|Ἁλαιεύς"))
+```
+
+Apllying the fixes, there is still very high mistake rate.
+
+```{r, results after problematic lemmata fixed}
+GISTfix %>% 
+  filter(!is.na(occups)) %>% 
+  unnest(occups) %>% 
+  count(occups, sort=T)
+# 4624 > 4655 inscriptions with at least one occupation > after fix 4569
+# 5389 > 5424 occurrences of occupation > 5331
+# 151 > 158 unique occupations > 158
+```
+
+
+## Morphological dictionary
+Old approach using the full declension from https://en.wiktionary.org/wiki/%E1%BC%81%CE%BB%CE%B9%CE%B5%CF%8D%CF%82
+https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0057:entry=a(lieu/s
+Fisherman, seaman, sailor
+
+```{r, testing one occupation}
+
+test<- c("ἁλιεύς", "ἁλιέως", "ἁλιῶς", "ἁλιεῖ", "ἁλιᾶ", "ἁλιέᾱ", "ἁλιεῦ",
+         "ἁλιῆ", "ἁλιέοιν", 
+        "ἁλιῆς", "ἁλιεῖς", "ἁλιέων", "ἁλιῶν", "ἁλιεῦσῐ","ἁλιεῦσῐν", "ἁλιέᾱς", "ἁλιᾶς")
+
+GIST %>% 
+   filter(clean_text_interpretive_word %in% str_subset(clean_text_interpretive_word, pattern = "ἁλιεύς"))
+
+```
+```{r, detecting all instances of one occupation in the full corpus}
+# Combine words into a pattern, ensuring it’s not preceded by an uppercase Greek letter
+# This version will use a lookbehind for spaces or word boundaries before each term
+pattern <- paste0("(?<![[:upper:]])\\b(", paste(test, collapse = "|"), ")\\b")
+
+# Add a new column with the detected term if found, otherwise NA
+GIST <- GIST %>%
+  mutate(detected_term = str_extract(clean_text_interpretive_word, pattern))
+
+# Filter to show only rows with a detected term (optional)
+filtered_data <- GIST %>%
+  filter(!is.na(detected_term))
+
+# Display the result
+filtered_data
+
+filtered_data$occups
+```
+Results:  Occurences from 485 to 5 !!!
+
+### Full morphological form search
+```{r, expanding the detection to all occupations and the full corpus}
+library(dplyr)
+library(stringr)
+
+# takes few hours to run!
+
+morphlist<- str_split(occups$Morphological_dictionary, pattern = ", ")
+
+# Step 2: Define a function to check for individual term matches in `clean_text_interpretive_word`
+find_individual_matches <- function(text, terms) {
+  # For each term, check if it is present in `text` and store matches
+  matches <- unlist(lapply(terms, function(term) {
+    if (str_detect(text, fixed(term))) term else NULL  # fixed() for exact match
+  }))
+  unique(matches)  # Return unique matches
+}
+
+# Step 3: Apply the function row-wise on `GISTsample`
+GIST_result <- GIST %>%
+  rowwise() %>%
+  mutate(
+    # Apply function to find individual matches for each `clean_text_interpretive_word`
+    occup_list_morph = list(find_individual_matches(clean_text_interpretive_word, unlist(morphlist)))
+  ) %>%
+  ungroup() %>%
+  # Keep only rows with at least one match
+  filter(lengths(occup_list_morph) > 0)
+
+# Display results
+GIST_result %>% 
+  unnest(occup_list_morph) %>% 
+  count(occup_list_morph, sort=T)
+```
 
