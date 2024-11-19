@@ -235,3 +235,29 @@ GIST_result %>%
   count(occup_list_morph, sort=T)
 ```
 
+
+# Temporal exploration
+
+```{r}
+GIST %>% 
+  filter(!is.na(not_before) & !is.na(not_after)) -> GISTdated
+#127,179 insc has both dates
+
+# before Romans
+GISTdated %>% 
+  filter(not_after <0) %>% nrow() -> beforeRomans
+
+
+# 1-4 CAD Romans
+GISTdated %>% 
+  filter(not_after >0) %>% nrow() -> afterRomans
+
+beforeRomans/nrow(GISTdated)
+afterRomans/nrow(GISTdated)
+
+beforeRomans/nrow(GIST)
+afterRomans/nrow(GIST)
+
+nrow(GISTdated)/nrow(GIST)
+```
+
