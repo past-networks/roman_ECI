@@ -1,0 +1,91 @@
+---
+title: "Occupations in Greek inscriptions"
+author: 
+- Petra Hermankova^[Aarhus University, Denmark, https://orcid.org/0000-0002-6349-0540]
+date: "`r format(Sys.Date())`"
+output:
+  html_document:
+    theme: united
+    toc: yes
+    toc_float: true
+    number_sections: true
+    toc_depth: 3
+    df_print: paged
+---
+
+# Initial setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(sf)
+library(sfarrow)
+library(tidyverse)
+library(jsonlite)
+library(tidyr)
+library(ggplot2)
+library(viridis)
+library(arrow)
+library(stringr)
+```
+
+```{r loading data}
+GIST <- read_parquet("../../../data/large_data/GIST_v1-1.parquet")
+
+occups <- read_tsv("../../../data/Occupations_GREEK.tsv")
+
+```
+
+# Finding occupations
+
+```{r}
+# Helper function to escape special characters in regex patterns
+escape_special_chars <- function(occupation) {
+  # Escape regex special characters
+  return(str_replace_all(occupation, "([\\^\\$\\.\\*\\+\\?\\(\\)\\[\\]\\{\\}\\|])", "\\\\\\1"))
+}
+
+# Function to find occupations with word boundaries and escaped characters
+find_occupations <- function(text, occupations) {
+  # Escape special characters and add word boundaries for each occupation
+  occupations_escaped <- sapply(occupations, function(occ) paste0("\\b", escape_special_chars(occ), "\\b"))
+  
+  # Check for matches of each escaped occupation within the text
+  matches <- occupations[sapply(occupations_escaped, function(occ_pattern) str_detect(text, occ_pattern))]
+  
+  # Return unique matches or NA if none found
+  if (length(matches) == 0) {
+    return(NA)
+  } else {
+    return(unique(matches))
+  }
+}
+
+
+```
+
+```{r}
+GISTsample <- head(GIST, 100)
+```
+
+
+```{r}
+# Apply the function to each row in the 'text' column
+GIST$occups <- lapply(GIST$lemmata, find_occupations, occupations = occups$Term)
+
+#GIST %>%
+  unnest(occups) %>%
+  count(occups, sort=T)
+
+```
+```{r}
+GIST %>% 
+  filter(!is.na(occups)) %>% 
+  unnest(occups) %>% 
+  count(occups, sort=T)
+# 4624 inscriptions with at least one occupation
+# 5389 occurrences of occupation
+# 151 unique occupations
+```
+
+
