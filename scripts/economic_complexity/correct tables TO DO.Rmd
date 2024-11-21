@@ -886,7 +886,7 @@ for (exclude_Rome_gu in c(TRUE,FALSE)) {
 ```
 
 Produce occupation tables instead
-```{r}
+```{r functions for occupation tables all biases}
 # this function computes tbls after all bias correction procedures have been applied
 all_bias_tbs <- function(original_tb,
                            language_it = 10, # cases considered
@@ -1004,7 +1004,6 @@ all_but_language_tbs<- function(original_tb,
   return(tbs_list)
 }
 ```
-
 
 Apply alternative corrections to the original tables
 ```{r compute the eci for provinces and countries after all bias corrections}
