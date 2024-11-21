@@ -765,7 +765,7 @@ write.csv(province_all_bias_eci_df, file = "../../results/economic_complexity/pr
 # countries
 country_all_bias_eci_df <- all_bias_eci_df(country_table)
 # save the results
-write.csv(country_all_bias_eci_df, file = "../../results/country_all_bias_eci_df.csv")
+write.csv(country_all_bias_eci_df, file = "../../results/economic_complexity/country_all_bias_eci_df.csv")
 ```
 
 Apply alternative corrections but language to the filtered tables
@@ -884,6 +884,157 @@ for (exclude_Rome_gu in c(TRUE,FALSE)) {
   }
 }
 ```
+
+Produce occupation tables instead
+```{r}
+# this function computes tbls after all bias correction procedures have been applied
+all_bias_tbs <- function(original_tb,
+                           language_it = 10, # cases considered
+                            status_it = 2, 
+                            gender_it = 2,
+                            agricola_it = 5,
+                            research_it = 5){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  #retrieve language tables
+  languages_tbls <- get(paste0(gu_type,"_table_greek_latin_lists"))
+  
+  # initialise tb list
+  tbs_list <- list()
+    
+  # loop and add
+  for (m in paste0("r_",max_distances[c(1,2)])){
+    languages_tbl_m <- languages_tbls[[m]][seq_len(language_it)]
+
+    for (l_it in seq_len(language_it)) {
+      tb_l_it <- languages_tbl_m[[l_it]]
+      status_tbs <- status_bias_correction_stochastic(tb_l_it,15,30,n_samples=status_it)
+
+      for (s_it in seq_len(status_it)) {
+        tb_s_it <- status_tbs[[s_it]]
+        gender_tbs <- lapply(gender_ratio_v, 
+                       function(gender_ratio) gender_bias(tb_s_it, gender_ratio))
+
+        for (g_it in seq_len(gender_it)) {
+          tb_g_it <- gender_tbs[[g_it]]
+          agricola_tbs <- lapply(seq(0,1,length.out=agricola_it),
+                         function(s) agricola_correction(tb_g_it,p=0.95,s))
+
+          for (a_it in seq_len(agricola_it)) {
+            tb_a_it <- agricola_tbs[[a_it]]
+            research_tbs <- lapply(seq(0,1,length.out=research_it),
+                                   function(p) research_correction(tb_a_it,p))
+
+            for (r_it in seq(research_it)){
+              tb_name <- ifelse(m=="r_0","without_neighbours","with_neighbours")
+              tb_name <- paste0(tb_name,
+                                "_l_it_",l_it,
+                                "_s_it_",s_it,
+                                "_g_it_",g_it,
+                                "_a_it_",a_it,
+                                "_r_it_",r_it)
+              
+              tbs_list[[tb_name]] <- research_tbs[[r_it]]
+            
+              # check progress
+              #print(tb_name)
+            }
+          }
+        } 
+      }
+    }
+  }
+  return(tbs_list)
+}
+
+
+# this function does the same, without language bias 
+all_but_language_tbs<- function(original_tb,
+                                status_it = 2, # cases considered
+                                gender_it = 2,
+                                agricola_it = 5,
+                                research_it = 5){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  # initialise tb list
+  tbs_list <- list()
+  
+  # apply status correction
+  status_tbs <- status_bias_correction_stochastic(original_tb,15,30,n_samples=status_it)
+
+  # loop and add
+  for (s_it in seq_len(status_it)) {
+    tb_s_it <- status_tbs[[s_it]]
+    gender_tbs <- lapply(gender_ratio_v, 
+                   function(gender_ratio) gender_bias(tb_s_it, gender_ratio))
+
+    for (g_it in seq_len(gender_it)) {
+      tb_g_it <- gender_tbs[[g_it]]
+      agricola_tbs <- lapply(seq(0,1,length.out=agricola_it),
+                     function(s) agricola_correction(tb_g_it,p=0.95,s))
+
+      for (a_it in seq_len(agricola_it)) {
+        tb_a_it <- agricola_tbs[[a_it]]
+        research_tbs <- lapply(seq(0,1,length.out=research_it),
+                               function(p) research_correction(tb_a_it,p))
+         research_ecis <- eci_list(research_tbs)
+         
+         for (r_it in seq(research_it)){
+              tb_name <- paste0("s_it_",s_it,
+                                "_g_it_",g_it,
+                                "_a_it_",a_it,
+                                "_r_it_",r_it)
+              
+              tbs_list[[tb_name]] <- research_tbs[[r_it]]
+            
+              # check progress
+              #print(tb_name)
+              }
+      }
+    } 
+  }
+  return(tbs_list)
+}
+```
+
+
+Apply alternative corrections to the original tables
+```{r compute the eci for provinces and countries after all bias corrections}
+# provinces
+province_all_bias_tbs <- all_bias_tbs(province_table)
+# save the results
+saveRDS(province_all_bias_tbs, file = "../../results/economic_complexity/province_all_bias_tbs.rds")
+
+# countries
+country_all_bias_tbs <- all_bias_tbs(country_table)
+# save the results
+saveRDS(country_all_bias_tbs, file = "../../results/economic_complexity/country_all_bias_tbs.rds")
+```
+
+Apply alternative corrections but language to the filtered tables
+```{r compute the eci for filtered provinces and countries after all but language bias corrections}
+# provinces
+filtered_province_table <- province_table[filtered_provinces,]
+filtered_province_all_but_language_bias_tbs <- all_but_language_tbs(filtered_province_table)
+# save the results
+saveRDS(filtered_province_all_but_language_bias_tbs, file = "../../results/economic_complexity/filtered_province_all_but_language_bias_tbs.rds")
+
+# countries
+filtered_country_table <- country_table[filtered_countries,]
+filtered_country_all_but_language_bias_tbs <- all_but_language_tbs(filtered_country_table)
+# save the results
+saveRDS(filtered_country_all_but_language_bias_tbs, file = "../../results/economic_complexity/filtered_country_all_but_language_bias_tbs.rds")
+```
+
+
 
 
 TO REVIEW
