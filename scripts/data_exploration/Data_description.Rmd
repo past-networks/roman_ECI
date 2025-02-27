@@ -130,6 +130,11 @@ nrow(occups) # alternative way, should be the same number
 length(unique(occups$`LIST-ID`))
 ```
 
+```{r}
+# how many of those type
+
+
+```
 
 ```{r}
 # how many occupations occur on inscription (counting the multiple occurrences on inscriptions)
@@ -152,6 +157,12 @@ length(unique(occups$occups)) # alternative way, should be the same number
 # counts by occupation
 
 sort(table(occups$occups))
+
+```
+```{r}
+# ratio of inscr types by inscr with occupation
+
+ 
 
 ```
 
