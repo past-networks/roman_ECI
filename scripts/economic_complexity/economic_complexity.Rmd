@@ -107,10 +107,7 @@ Note, however, that these older versions of the packages may not be available fo
 # invisible(lapply(required_packages, library, character.only = TRUE))
 ```
 
-## Load Data TO MODIFY WITH CORRECT PATHS
-CREATE A NEW DIRECTORY
-DOWNLOAD FILES IN IT TO DO
-
+## Load Data
 Read the data on inscriptions and standardised spelling
 ```{r read data on inscriptions}
 # inscriptions
@@ -121,7 +118,7 @@ occupations_all <- read_delim("../../data/economic_complexity/occupations.csv", 
 occupations_to_merge <- read_delim("../../data/economic_complexity/occupations_to_merge.csv", delim=";")
 
 # inscriptions containing people
-EDH_people <- read_csv("C:/Users/au732923/OneDrive - Aarhus Universitet/Desktop/PSNP/EDH_sna/data/EDH_people_2021.csv")
+EDH_people <- read_csv("../../data/EDH_people_2021.csv")
 
 # epitaphs
 epitaphs <- inscriptions[inscriptions$type_of_inscription_auto %in% c("epitaph"),]
@@ -130,38 +127,16 @@ epitaphs <- inscriptions[inscriptions$type_of_inscription_auto %in% c("epitaph")
 greek_inscriptions <- read_parquet("../../data/economic_complexity/GIST_v1-1.parquet")
 ```
 
-Read the data on geographical units. THESE ARE LOCAL PATHS. NEED INSTRUCTION ON HOW TO DOWNLOAD
+Read the data on geographical units.
 ```{r geographical data}
-# cities based on Hanson's dataset
+# cities based on Hanson's dataset 
 cities <- st_read("../../data/economic_complexity/roman_cities_pop.geojson")
 
 # Roman provinces (digitised and corrected by Adam Pažout)
-## read the data
-provinces <- read_sf("../../data/economic_complexity/roman_provinces_cleaned/roman_provinces_foranalysisdissolved.shp")
-## drop z geometry
-provinces <- st_zm(provinces, drop = TRUE, what = "ZM")
-## transform it in a relevant coordinate reference system
-provinces <- st_transform(provinces, crs=crs("epsg:4326"))
-## delete Roma since it lies inside Latium
-provinces <- provinces[!provinces$province=="Roma",]
-## delete unnecessary columns for our scopes
-provinces <- provinces[,c("province","geometry")]
-
-#alternative
-provinces_2 <- read_sf("C:/Users/au732923/Downloads/roman_provinces_modified_2.shp")
-## drop z geometry
-provinces_2 <- st_zm(provinces_2, drop = TRUE, what = "ZM")
-## transform it in a relevant coordinate reference system
-provinces_2 <- st_transform(provinces_2, crs=crs("epsg:4326"))
-## delete Roma since it lies inside Latium
-provinces_2 <- provinces_2[!provinces_2$province=="Roma",]
-## delete unnecessary columns for our scopes
-provinces_2 <- provinces_2[,c("province","geometry")]
-## sort alphabetically
-provinces_2 <- provinces_2[order(provinces_2$province),]
+provinces <- read_sf("../../data/economic_complexity/provinces/provinces.shp")
 
 # country borders
-## read the data from local path. Need to download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp 
+## Orginal data can be download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp 
 world_sf <- read_sf('../../data/economic_complexity/world-administrative-boundaries/world-administrative-boundaries.shp') 
 ## dissolve the administrative boundaries for visualisation purposes
 world_no_borders_sf <- st_union(world_sf) 
@@ -267,16 +242,7 @@ occupations_all$std_spelling <- NA
 
 for (i in seq(nrow(occupations_all))) {
   occ_term <- occupations_all$Term_full[i]
-  # for an occupational term, see if it needs to be merged 
-  #occ_word_match <- str_detect(occupations_to_merge$To_be_merged,occ_term)
-
- # in case it does, merge it, otherwise, the term itself is the standard spelling
-  #occupations_all$std_spelling[i] <- ifelse(any(occ_word_match),
-  #       occupations_to_merge$Main_term[occ_word_match],
-  #       occ_term)
-  
-  
-   # MISTAKE HERE: NEED TO match this
+   # CHECK THIS
   occupations_all$std_spelling[i] <- ifelse(occ_term %in% occupations_to_merge_separated$alternative_spellings,
                                             occupations_to_merge_separated$standard_spelling[which(occupations_to_merge_separated$alternative_spellings==occ_term)],
                                             occ_term
@@ -579,7 +545,7 @@ plot_and_save(epitaphs_in_provinces_map)
 plot_and_save(greek_inscriptions_in_provinces_map)
 ```
 
-Find counts of all Latin inscriptions by province RK : CHANGED from all_latin_...
+Find counts of all Latin inscriptions by province
 ```{r counts of inscriptions by province}
 # all latin inscriptions
 n_latin_inscriptions_in_provinces <- latin_inscriptions_in_provinces$province %>% 
@@ -1208,7 +1174,7 @@ table_of_occupations <- function(insc_w_occ){
 } 
 ```
 
-This function takes as input an occupational table and a geographical unit and plots the occupation table as a heatmap TO DO
+This function takes as input an occupational table and a geographical unit and plots the occupation table as a heatmap
 ```{r function for occupational tables as heatmaps}
 occ_heat_map <- function(occ_table){
   # retrieve gu type
