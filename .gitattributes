@@ -1,0 +1,2 @@
+data/economic_complexity/LIST_occupsorgs_industry_simple_20231206.json filter=lfs diff=lfs merge=lfs -text
+data/economic_complexity/LIST_occupsorgs_industry.parquet filter=lfs diff=lfs merge=lfs -text
