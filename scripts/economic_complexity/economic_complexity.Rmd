@@ -111,20 +111,22 @@ Note, however, that these older versions of the packages may not be available fo
 Read the data on inscriptions and standardised spelling
 ```{r read data on inscriptions}
 # inscriptions
-inscriptions <- read_parquet("../../data/economic_complexity/LIST_occupsorgs_industry_simple_20231206.parquet")
+#inscriptions <- read_parquet("../../data/economic_complexity/LIST_occupsorgs_industry_simple_20231206.parquet") # this is the old data from before Petra's clean up, 511973 inscriptions
+inscriptions <- read_parquet("../../data/large_data/LIST_occups_simple.parquet") # new data after Petra's cleanup, 525870 inscriptions
 
 # occupations to merge 
 occupations_all <- read_delim("../../data/economic_complexity/occupations.csv", delim=";")
 occupations_to_merge <- read_delim("../../data/economic_complexity/occupations_to_merge.csv", delim=";")
 
 # inscriptions containing people
-EDH_people <- read_csv("../../data/EDH_people_2021.csv")
+EDH_people <- read_csv("../../data/economic_complexity/EDH_people_2021.csv")
 
 # epitaphs
 epitaphs <- inscriptions[inscriptions$type_of_inscription_auto %in% c("epitaph"),]
 
 # greek inscriptions
-greek_inscriptions <- read_parquet("../../data/economic_complexity/GIST_v1-1.parquet")
+greek_inscriptions <- read_parquet("../../data/large_data/GIST_v1-1.parquet") # manually downloaded from zenodo.org/records/10127597
+
 ```
 
 Read the data on geographical units.
@@ -273,7 +275,7 @@ Extract info on unique occupations in inscriptions to fill the table
 unique_occupations_in_inscriptions_df <- data.frame(std_spelling = sort(unique(unlist(inscriptions_w_occupations$occups_std)))) %>% 
   left_join(occupations_all,by=join_by(std_spelling),)
 
-#write.csv(unique_occupations_in_inscriptions_df,"../../results/economic_complexity/unique_occupations_in_inscriptions.csv")
+write.csv(unique_occupations_in_inscriptions_df,"../../results/economic_complexity/unique_occupations_in_inscriptions.csv")
 ```
 
 ## Geographical units
@@ -297,12 +299,24 @@ greek_inscriptions_sf <- st_as_sf(na.omit(greek_inscriptions[,c("PHI_ID","Longit
                                   crs = crs("epsg:4326"))
 
 # Latin inscriptions with occupations
-inscriptions_w_occupations_sf <- st_as_sf(inscriptions_w_occupations,
+
+# only those with Latitude and Longitude
+inscriptions_w_occupations_geo <- inscriptions_w_occupations %>% 
+  filter(!is.na(Latitude))
+
+
+inscriptions_w_occupations_sf <- st_as_sf(inscriptions_w_occupations_geo,
                                           coords = c("Longitude","Latitude"),
                                           crs = crs("epsg:4326"))
 
 # Latin epitaphs
-epitaphs_sf <- st_as_sf(epitaphs,
+
+# only those with Latitude and Longitude
+
+epitaphs_geo <- epitaphs %>% 
+  filter(!is.na(Latitude))
+
+epitaphs_sf <- st_as_sf(epitaphs_geo,
                         coords = c("Longitude","Latitude"),
                         crs = crs("epsg:4326"))
 ```
