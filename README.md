@@ -1,7 +1,7 @@
 # Economic complexity of the Roman Empire
 
 ## About
-[_Project exploring the economic complexity of the Roman Empire on the basis of mentions of occupations on Latin inscriptions._]
+_Project exploring the economic complexity of the Roman Empire on the basis of mentions of occupations on Latin inscriptions._
 
 ## Authors 
 
