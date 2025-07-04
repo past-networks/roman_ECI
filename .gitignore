@@ -2,4 +2,6 @@
 /data/large_data/
 .Rproj.user
 .RData
+.Rhistory
+.Rproj
 scripts/data_exploration/LISTsmall.json
