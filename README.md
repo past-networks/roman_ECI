@@ -11,7 +11,7 @@ _Project exploring the economic complexity of the Roman Empire on the basis of m
 * Tom Brughmans [![](https://orcid.org/sites/default/files/images/orcid_16x16.png)](https://orcid.org/0000-0002-1589-7768), PSNP, Aarhus University
 
 ## Funding
-*The Past Social Networks Projects* is funded by The Carlsberg Foundation’s Young Researcher Fellowship (CF21-0382) in 2022-2026.
+This research was conducted within the framework of the Past Social Networks Project (2023-2026), funded by The Carlsberg Foundation’s Young Researcher Fellowship (CF21-0382). This work was supported by a research grant (VIL57402) from VILLUM FONDEN.
 
 ## License
 CC-BY-SA 4.0, see attached [License.md](./License.md)
@@ -23,9 +23,11 @@ CC-BY-SA 4.0, see attached [License.md](./License.md)
 - consists of 525,870 inscriptions, enriched by 65 attributes. 77,091 inscriptions are overlapping between the two source datasets (i.e. EDH and EDCS); 3,316 inscriptions are exclusively from EDH; 445,463 inscriptions are exclusively from EDCS. 511,973 inscriptions have valid geospatial coordinates (the geometry attribute). 206,570 inscriptions have a numerical date of origin expressed using an interval or singular year using the attributes not_before and not_after. The dataset also employs a machine learning model to classify the inscriptions covered exclusively by EDCS in terms of 22 categories employed by EDH, see Kaše, Heřmánková, Sobotkova 2021.
 - Citation: `Kaše, V., Heřmánková, P., & Sobotková, A. (2023). LIST (v1.0) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.8431323` and `Kaše, V., Heřmánková, P., & Sobotková, A. (2024). LIST (v1.2) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.10473706`
 
+**NOTE: users can generate their own datasets from raw data, or they can access the necessary epigraphic data to run these scripts via [ScienceData.dk](https://sciencedata.dk/shared/dd2807e5686633e7276389cdf28fc130).**
+
 2. Geographic units data to compute economic complexity
 - Modern countries: download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp
-- Roman provinces: shapefile created by Adam Pažout on the basis of [TBD]
+- Roman provinces: The shapefile of Roman provinces in 200 CE (peak Roman Empire under the Severan dynasty) is based on 'roman-empire-ce-200-provinces.geojson' published by The Ancient World Mapping Centre \cite{ancient_world_mapping_centre_ancient_nodate} and corrected by Adam Pazout in 2023. https://github.com/AWMC/geodata/tree/master/Cultural-Data/political_shading/roman_empire_ce_200_provinces
 - Pleaides regions: https://raw.githubusercontent.com/pelagios/magis-pleiades-regions/main/pleiades-regions-magis-pelagios.geojson
 
 3. Dataset of ancient cities
@@ -45,7 +47,7 @@ Compiled by Petra Heřmánková in 2022, based on:
 - The GIST dataset consists of 217,863 inscriptions, enriched by 36 attributes.
 - Citation: `Kaše, V., Heřmánková, P., & Sobotková, A. (2023). GIST (v1.1) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.10139110`
 
-6. Modern trade data [tba]
+6. Modern trade data: `The Growth Lab at Harvard University, 2019, Harvard Dataverse, https://doi.org/10.7910/DVN/H8SFD2` (6.5 GB) Download from https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/H8SFD2&version=10.0
 
 ## Scripts
 

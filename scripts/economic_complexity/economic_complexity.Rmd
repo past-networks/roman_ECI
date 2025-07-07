@@ -107,11 +107,29 @@ Note, however, that these older versions of the packages may not be available fo
 # invisible(lapply(required_packages, library, character.only = TRUE))
 ```
 
+
+### Efficient usage of computer memory
+This script requires a lot of computer memory to run. Therefore, we recommend clearing objects frequently (remove large objects when not needed):
+
+```{r}
+library(pryr)
+rm() # removes large file
+gc() # Force garbage collection
+mem_used()  # Check current memory usage
+object_size()  # Size of specific objects
+```
+
+Run the following script in your terminal to increase virtual memory on your system, though this will be slower than using RAM
+`R --max-ppsize=500000 --max-nsize=1000000`
+
 ## Load Data
 Read the data on inscriptions and standardised spelling
 ```{r read data on inscriptions}
 # inscriptions
-#inscriptions <- read_parquet("../../data/economic_complexity/LIST_occupsorgs_industry_simple_20231206.parquet") # this is the old data from before Petra's clean up, 511973 inscriptions
+
+
+
+
 inscriptions <- read_parquet("../../data/large_data/LIST_occups_simple.parquet") # new data after Petra's cleanup, 525870 inscriptions
 
 # occupations to merge 
@@ -134,7 +152,7 @@ Read the data on geographical units.
 # cities based on Hanson's dataset 
 cities <- st_read("../../data/economic_complexity/roman_cities_pop.geojson")
 
-# Roman provinces (digitised and corrected by Adam Pažout)
+# Roman provinces (digitised by Ancient World Mapping Centre and corrected by Adam Pažout, 200 CE)
 provinces <- read_sf("../../data/economic_complexity/provinces/provinces.shp")
 
 # country borders
@@ -329,6 +347,13 @@ First, find a list of the countries that intersected the Roman Empire
 ```{r countries intersection the Roman Empire}
 intersecting_indices <- st_intersects(world_sf, provinces, sparse = FALSE)
 intersecting_countries <- world_sf$iso3[apply(intersecting_indices, 1, any)]
+
+saveRDS(intersecting_indices, "../../data/economic_complexity/intersecting_indices.rds")
+saveRDS(intersecting_countries, "../../data/economic_complexity/intersecting_countries.rds")
+
+intersecting_countries <- readRDS("../../data/economic_complexity/intersecting_countries.rds")
+intersecting_indices <- readRDS("../../data/economic_complexity/intersecting_indices.rds")
+
 ```
 
 The following function takes the sf of inscriptions and assigns each one to the corresponding (closest) modern country
@@ -872,10 +897,10 @@ provinces_rural_pc_df <- data.frame(
 
 Finally save these results.
 ```{r save population by province as csv}
-#write.csv(provinces_macroregions_full_info_df,
-#          "../../results/economic_complexity/provinces_macroregions_full_info.csv")
-#write.csv(provinces_population_df,
-#          "../../results/economic_complexity/provinces_population.csv")
+write.csv(provinces_macroregions_full_info_df,
+          "../../results/economic_complexity/provinces_macroregions_full_info.csv")
+write.csv(provinces_population_df,
+          "../../results/economic_complexity/provinces_population.csv")
 
 ```
 
@@ -1030,10 +1055,10 @@ rownames(countries_population_df) <- countries_population_df$country
 (sum(provinces_macroregions_full_info_df$tot_pop_min) == sum(countries_population_df$tot_pop_min) && sum(provinces_macroregions_full_info_df$tot_pop_max) == sum(countries_population_df$tot_pop_max)) 
 
 # save results
-#write.csv(countries_population_df,
-#          "../../results/economic_complexity/countries_population.csv")
-#write.csv(intersections_pop_full_info_df,
-#          "../../results/economic_complexity/intersections_population_full_info.csv")
+write.csv(countries_population_df,
+          "../../results/economic_complexity/countries_population.csv")
+write.csv(intersections_pop_full_info_df,
+          "../../results/economic_complexity/intersections_population_full_info.csv")
 ```
 
 Then compute the ratios of rural population
@@ -1102,7 +1127,7 @@ for (i in seq_len(n_iter)) {
 }
 
 # save results
-#write.csv(provinces_total_population_df,"../../results/economic_complexity/provinces_total_population.csv")
+write.csv(provinces_total_population_df,"../../results/economic_complexity/provinces_total_population.csv")
 ```
 
 #### Ratios population/epitaph
@@ -1130,8 +1155,8 @@ Now, save the results
 # save results
 #write.csv(ratio_epitaphs_pop_countries,
 #          "../../results/economic_complexity/ratio_epitaphs_pop_countries.csv")
-#write.csv(ratio_epitaphs_pop_provinces,
-#          "../../results/economic_complexity/ratio_epitaphs_pop_provinces.csv")
+write.csv(ratio_epitaphs_pop_provinces,
+          "../../results/economic_complexity/ratio_epitaphs_pop_provinces.csv")
 ```
 
 Repeat the same for person-year by epitaph
@@ -1940,6 +1965,7 @@ If the rate of inscription production were constant across individuals, we would
 
 The final step is to recalibrate the total number of occupations across all provinces to reflect the population in each geographical unit at a given point in time.
 This adjustment helps to account for potential differences in the rate of inscription production across various geographical units and corrects for biases arising from the uneven extent of archaeological excavations in different regions of the Roman Empire.
+
 #### Implementation
 We define a function that returns an occupation table with rowsums proportional to the population of a province
 ```{r research correction}
