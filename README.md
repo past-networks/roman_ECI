@@ -26,9 +26,9 @@ CC-BY-SA 4.0, see attached [License.md](./License.md)
 **NOTE: users can generate their own datasets from raw data, or they can access the necessary epigraphic data to run these scripts via [ScienceData.dk](https://sciencedata.dk/shared/dd2807e5686633e7276389cdf28fc130).**
 
 2. Geographic units data to compute economic complexity
-- Modern countries: download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp
-- Roman provinces: The shapefile of Roman provinces in 200 CE (peak Roman Empire under the Severan dynasty) is based on 'roman-empire-ce-200-provinces.geojson' published by The Ancient World Mapping Centre \cite{ancient_world_mapping_centre_ancient_nodate} and corrected by Adam Pazout in 2023. https://github.com/AWMC/geodata/tree/master/Cultural-Data/political_shading/roman_empire_ce_200_provinces
-- Pleaides regions: https://raw.githubusercontent.com/pelagios/magis-pleiades-regions/main/pleiades-regions-magis-pelagios.geojson
+- `Modern countries`: download from https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/world-administrative-boundaries/exports/shp
+- `Roman provinces`: The shapefile of Roman provinces in 200 CE (peak Roman Empire under the Severan dynasty) is based on 'roman-empire-ce-200-provinces.geojson' published by The Ancient World Mapping Centre and corrected by Adam Pazout in 2023. https://github.com/AWMC/geodata/tree/master/Cultural-Data/political_shading/roman_empire_ce_200_provinces
+- `Pleaides regions`: https://raw.githubusercontent.com/pelagios/magis-pleiades-regions/main/pleiades-regions-magis-pelagios.geojson
 
 3. Dataset of ancient cities
 - `Hanson J. W., An urban geography of the Roman world, 100 BC to AD 300. Oxford: Archaeopress; 2016. http://oxrep.classics.ox.ac.uk/oxrep/docs/Hanson2016/Hanson2016_Cities_OxREP.csv`
@@ -48,7 +48,7 @@ Compiled by Petra Heřmánková in 2022, based on:
 - Citation: `Kaše, V., Heřmánková, P., & Sobotková, A. (2023). GIST (v1.1) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.10139110`
 - Accessible via [ScienceData.dk](https://sciencedata.dk/shared/dd2807e5686633e7276389cdf28fc130)
 
-6. Modern trade data: `The Growth Lab at Harvard University, 2019, Harvard Dataverse, https://doi.org/10.7910/DVN/H8SFD2` (6.5 GB) Download from https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/H8SFD2&version=10.0
+6. `Modern trade data`: `The Growth Lab at Harvard University, 2019, Harvard Dataverse, https://doi.org/10.7910/DVN/H8SFD2` (6.5 GB) Download from https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/H8SFD2&version=10.0
 
 ## Scripts
 
