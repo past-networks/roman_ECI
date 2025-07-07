@@ -46,6 +46,7 @@ Compiled by Petra Heřmánková in 2022, based on:
 - mainly based on Greek inscriptions from the dataset of Searchable Greek Inscriptions [PHI](https://inscriptions.packhum.org/) and I.PHI dataset published by the Pythia Project `Sommerschield, T., Assael, Y., Shillingford, B., Bordbar, M., Pavlopoulos, J., Chatzipanagiotou, M., Androutsopoulos, I., Prag, J., & de Freitas, N. (2021). I.PHI dataset: Ancient Greek inscriptions. https://github.com/sommerschield/iphi.` The individual inscriptions have been cleaned, preprocessed and enriched with additional data, such as date in a numeric format and geolocation.
 - The GIST dataset consists of 217,863 inscriptions, enriched by 36 attributes.
 - Citation: `Kaše, V., Heřmánková, P., & Sobotková, A. (2023). GIST (v1.1) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.10139110`
+- Accessible via [ScienceData.dk](https://sciencedata.dk/shared/dd2807e5686633e7276389cdf28fc130)
 
 6. Modern trade data: `The Growth Lab at Harvard University, 2019, Harvard Dataverse, https://doi.org/10.7910/DVN/H8SFD2` (6.5 GB) Download from https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/H8SFD2&version=10.0
 
