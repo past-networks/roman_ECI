@@ -126,9 +126,7 @@ Run the following script in your terminal to increase virtual memory on your sys
 Read the data on inscriptions and standardised spelling
 ```{r read data on inscriptions}
 # inscriptions
-
-
-
+# datasets are stored in a new folder data/large_data/ and have to be manually downloaded from the following location: https://sciencedata.dk/shared/dd2807e5686633e7276389cdf28fc130
 
 inscriptions <- read_parquet("../../data/large_data/LIST_occups_simple.parquet") # new data after Petra's cleanup, 525870 inscriptions
 
