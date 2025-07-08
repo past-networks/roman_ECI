@@ -1,7 +1,8 @@
+import rdata
 import pandas as pd
 import geopandas as gpd
 
-eci_bias = pd.read_csv("../../results/economic_complexity/province_table.csv", sep = "\t").rename(columns = {"eci": "eci_biased"})
+eci_bias = rdata.read_rds("../../results/economic_complexity/province_individual_bias_eci_stats.rds")["original"]["eci"].rename(columns = {"eci": "eci_biased"})
 ecis = pd.read_csv("../../results/economic_complexity/filtered_province_all_but_language_bias_eci_df.csv", index_col = 0).groupby(by = "province")["eci"].mean().reset_index().rename(columns = {"eci": "eci_avg"})
 
 provinces = set(ecis["province"])
