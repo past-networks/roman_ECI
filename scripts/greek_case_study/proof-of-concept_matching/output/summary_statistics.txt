@@ -1,0 +1,12 @@
+GREEK OCCUPATION SEARCH - SUMMARY STATISTICS
+============================================================
+
+total_inscriptions_in_corpus            :    217,863
+total_inscriptions_processed            :    216,240
+inscriptions_with_occupations           :      7,751
+percentage_with_occupations             :       3.58
+total_matches                           :      9,034
+unique_occupations_found                :        150
+total_occupations_searched              :        331
+inscriptions_with_multiple_occupations  :        894
+max_occupations_per_inscription         :         17

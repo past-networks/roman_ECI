@@ -72,8 +72,13 @@ Compiled by Petra Heřmánková in 2022, based on:
 - Use version of the epigraphic dataset `LIST 1.2` (contains the same number of inscriptions as `LIST 1.0`).
 - Script `06_tab_1.py` uses 6.5GB of trade data accessible from other location, indicated in the script. The data needs to be manually downloaded for the script to run.
 
-### 4. Greek NLP [supplementary]
-1. Script `Greek_data_extraction_eval.Rmd` in R, by Petra Hermankova, evaluates the computer assisted extraction methods, that extract the occupational data from Greek inscriptions. The sample data is manually evaluated (close reading of Greek inscriptions by Hermankova) to conform the current detection methods do not provide as reliable and robust data as in the case of Latin inscriptions.
+### 4. Greek case study [supplementary]
+
+Folder containing 1) evaluation of the current lemmatization methods, 2) proof-of-concept for occupation matching
+1. Folder `lemmatization`: Script `Greek_data_extraction_eval.Rmd` in R, by Petra Hermankova, evaluates the computer assisted extraction methods, that extract the occupational data from Greek inscriptions. The sample data is manually evaluated (close reading of Greek inscriptions by Hermankova) to conform the current detection methods do not provide as reliable and robust data as in the case of Latin inscriptions.
+
+2. Folder `proof-of-concept_matching`: Script `greek_occupation_search_gist.ipynb` in Python, by Petra Hermankova, generated together with Claude.ai Sonnet 4.5 as a proof of concept for matching of occupations in Greek inscriptions. The methods needs to be further tested and evaluated.
+
 - Data `Occupations_GREEK.tsv` is a collection of Greek occupations collected by Hermankova from various publications and previously unpublished. If you would like to use it in your research, please, get in touch. The standard CC BY-SA 4.0 License applies.
 
 
