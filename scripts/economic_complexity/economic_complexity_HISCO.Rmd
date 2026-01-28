@@ -1,0 +1,1049 @@
+---
+title: "eci_HISCO"
+output: html_document
+date: "2026-01-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This markdown extends economic_complexity.Rmd, recomputing its results using HISCO classifications of the occupational words instead of occupational words directly. 
+
+Note: run after economic_complexity.Rmd
+
+## HISCO data and conversion functions
+First, we read the HISCO dataset
+```{r read updated dataset with HISCO data}
+occupations_all_HISCO <- read.csv("../../data/economic_complexity/Occupations_Ancient_Mediterranean_LATIN_HISCO.csv")
+```
+
+We assign a HISCO level 4 data to standardised occupations
+```{r assign HISCO level 4 data to each standardised occupation}
+# RK: we know they are in the same order
+occupations_HISCO <- occupations_all
+occupations_HISCO$HISCO <- occupations_all_HISCO$HISCO_codes
+occupations_HISCO$HISCO4 <- str_sub(occupations_HISCO$HISCO,1,4)
+
+# extract info on occupations' HISCO category
+occupations_HISCO <- unique(occupations_HISCO[,c("std_spelling","HISCO4")])
+
+# data issue: some professions have two different HISCO codes: we assign only the first one
+HISCO_issues <-  occupations_HISCO$std_spelling[which(duplicated(occupations_HISCO$std_spelling))]
+for (i in HISCO_issues){
+  occupations_HISCO$HISCO4[occupations_HISCO$std_spelling ==i] <-
+    occupations_HISCO$HISCO4[occupations_HISCO$std_spelling ==i][1]
+}
+occupations_HISCO <- unique(occupations_HISCO[,c("std_spelling","HISCO4")])
+
+# initialise new column of HISCOs
+inscriptions_w_occupations_in_provinces$occup_HISCO <- rep(list(NA),nrow(inscriptions_w_occupations_in_provinces))
+
+# assign HISCO to the occupations
+for (i in seq(nrow(inscriptions_w_occupations_in_provinces))){
+  # extract an inscription
+  inscription <- inscriptions_w_occupations_in_provinces[i,]
+  # find the occupations in the inscription and associate it with the HISCO
+  inscription_occ <- data.frame(std_spelling = unlist(inscription$occups_std)) %>%
+    left_join(occupations_HISCO,
+              by = "std_spelling")
+  # save the standard spellings for the occupations in the inscription
+  inscriptions_w_occupations_in_provinces$occup_HISCO[[i]] <- inscription_occ$HISCO4
+}
+
+# same for countries
+inscriptions_w_occupations_in_countries$occup_HISCO <- rep(list(NA),nrow(inscriptions_w_occupations_in_countries))
+
+# assign HISOC to the occupations
+for (i in seq(nrow(inscriptions_w_occupations_in_countries))){
+  # extract an inscription
+  inscription <- inscriptions_w_occupations_in_countries[i,]
+  # find the occupations in the inscription and associate it with the HISCO
+  inscription_occ <- data.frame(std_spelling = unlist(inscription$occups_std)) %>%
+    left_join(occupations_HISCO,
+              by = "std_spelling")
+  # save the standard spellings for the occupations in the inscription
+  inscriptions_w_occupations_in_countries$occup_HISCO[[i]] <- inscription_occ$HISCO4
+}
+```
+
+We adapt the function to construct occupation tables so it works with HISCO data
+```{r modified table of occupation function for HISCO}
+table_of_occupations_HISCO <- function(insc_w_occ){
+  # ensure that the info on geographical unit (gu) is included in the input
+  gu_type <- which_gu(insc_w_occ)
+
+  # create list of geographical units
+  if (gu_type == "province") {
+    gu <- provinces$province
+  } else if (gu_type == "country") {
+    # note that some disputed areas in the intersections are not assigned to any country, hence exclude na
+    gu <- na.omit(unique(intersections$country))
+  } # no need to check for other cases as which_gu already takes care of it
+  
+  # unnest the list of occupations in each inscription (based on the standard occupational terms)
+  insc_w_occ_unnested <- unnest(insc_w_occ,"occup_HISCO")
+  
+  # initialise table
+  occ_table <- table(insc_w_occ_unnested[[gu_type]],
+                     insc_w_occ_unnested$occup_HISCO)
+
+  # add zero rows for gus without inscriptions
+  gu_not_in_occ_table <- gu[!gu%in%insc_w_occ_unnested[[gu_type]]]
+  occ_table_zeros <- matrix(0, nrow= length(gu_not_in_occ_table), ncol = ncol(occ_table))
+  rownames(occ_table_zeros) <- gu_not_in_occ_table
+  occ_table <- rbind(occ_table,occ_table_zeros) %>% as.table()
+
+  # sort the table based on row and column sums
+  occ_table <- sort_table(occ_table)
+  
+  # return occupation table
+  return(occ_table)
+} 
+```
+
+Finally, we compute the occupation tables based on HISCO level 4 codes.
+```{r compute HISCO occupational tables}
+province_table_HISCO <- table_of_occupations_HISCO(inscriptions_w_occupations_in_provinces)
+country_table_HISCO <- table_of_occupations_HISCO(inscriptions_w_occupations_in_countries)
+```
+
+We plot and save the results
+```{r plot and save heatmaps}
+# define heatmaps
+province_table_HISCO_heatmap <- occ_heat_map(province_table_HISCO)
+country_table_HISCO_heatmap <- occ_heat_map(country_table_HISCO)
+
+# plot and save
+plot_and_save(province_table_HISCO_heatmap,width = 15, height = 10)
+plot_and_save(country_table_HISCO_heatmap,width = 15, height = 10)
+```
+
+We also create a function to automatically convert table of occupations from standard spelling to HISCO codes
+```{r function to convert a table of occupations into a HISCO table}
+# define map from occupation standard spelling to HISCO category
+occ_to_HISCO <- setNames(occupations_HISCO$HISCO4, occupations_HISCO$std_spelling)
+
+# function to convert occupation table to HISCO table
+table_to_HISCO <- function(tbl){
+  df_HISCO <- sapply(
+    split(colnames(tbl), occ_to_HISCO[colnames(tbl)]),
+    function(cols) rowSums(tbl[, cols, drop = FALSE])
+    )
+  tbl_HISCO <- sort_table(as.table(df_HISCO))
+  return(tbl_HISCO)
+}
+
+# check if correct
+# example_table <- province_table_greek_latin_lists$r_0$it_1
+# table_to_HISCO(example_table)
+```
+
+## Analysis
+### Effects of individual biases on eci
+Adapt the function to assess the impact of individual bias corrections
+```{r modify individual_bias_eci_stats for HISCO}
+# this function computes eci stats after each bias correction procedure
+individual_bias_eci_stats_HISCO <- function(original_tb){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # initialise stats
+  gu_stats <- list()
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  # convert to HISCO
+  original_tb_HISCO <- table_to_HISCO(original_tb)
+  
+  # compute values for the original HISCO table
+  gu_stats$original <- economic_complexity(original_tb_HISCO)
+  
+  # language bias
+  language_stats <- list()
+  for (m in paste0("r_",max_distances[1:2])){
+    gu_table_greek_latin_lists <-
+      get(
+        paste0(
+          gu_type,
+          "_table_greek_latin_lists"
+          )
+        )[[m]][1:100]
+    gu_table_HISCO_greek_latin_lists <- 
+      lapply(
+        gu_table_greek_latin_lists, 
+        table_to_HISCO)
+    
+    # compute eci for this list
+    ecis_m <- eci_list(gu_table_HISCO_greek_latin_lists)
+    language_stats[[m]] <- eci_stats(ecis_m,gu_type)
+    }
+  gu_stats[["language"]] <- language_stats
+  print("language done")
+  
+  # status bias
+  status_tbs <- status_bias_correction_stochastic(original_tb,15,30,n_samples=100)
+  status_tbs_HISCO <- lapply(status_tbs, table_to_HISCO)
+  status_ecis <- eci_list(status_tbs_HISCO)
+  gu_stats[["status"]] <- eci_stats(status_ecis,gu_type)
+  print("status done")
+
+  # gender bias
+  gender_tbs <- lapply(gender_ratio_v[1:100], 
+                       function(gender_ratio) gender_bias(original_tb, gender_ratio))
+  gender_tbs_HISCO <- lapply(gender_tbs, table_to_HISCO)
+  gender_ecis <- eci_list(gender_tbs_HISCO)
+  gu_stats[["gender"]] <- eci_stats(gender_ecis,gu_type)
+  print("gender done")
+
+  # agricola
+  agricola_tbs <- lapply(seq(0,1,by=0.01),
+                         function(s) agricola_correction(original_tb,p=0.95,s))
+  agricola_tbs_HISCO <- lapply(agricola_tbs, table_to_HISCO)
+  agricola_ecis <- eci_list(agricola_tbs_HISCO)
+  gu_stats[["agricola"]] <- eci_stats(agricola_ecis,gu_type)
+  print("agricola done")
+
+  # research
+  research_tbs <- lapply(seq(0,1,by=0.01),
+                         function(p) research_correction(original_tb,p))
+  research_tbs_HISCO <- lapply(research_tbs, table_to_HISCO)
+  research_ecis <- eci_list(research_tbs_HISCO)
+  gu_stats[["research"]] <- eci_stats(research_ecis,gu_type)
+  print("research done")
+
+  return(gu_stats)
+}
+```
+
+Apply the function and study the effects on all provinces
+```{r compute the stats for all provinces and countries eci}
+province_individual_bias_eci_stats_HISCO <- individual_bias_eci_stats_HISCO(province_table)
+# save the results
+saveRDS(province_individual_bias_eci_stats_HISCO, file = "../../results/economic_complexity/province_individual_bias_eci_stats_HISCO.rds")
+
+country_individual_bias_eci_stats_HISCO <- individual_bias_eci_stats_HISCO(country_table)
+# save the results
+saveRDS(country_individual_bias_eci_stats_HISCO, file = "../../results/economic_complexity/country_individual_bias_eci_stats_HISCO.rds")
+```
+
+We then compute the stats for filtered provinces and countries (conservative approach)
+```{r compute the stats for filtered provinces and countries eci}
+# provinces
+filtered_province_individual_bias_eci_stats_HISCO <-
+  individual_bias_eci_stats_HISCO(filtered_province_table)
+# save the results
+saveRDS(filtered_province_individual_bias_eci_stats_HISCO, file = "../../results/economic_complexity/filtered_province_individual_bias_eci_stats_HISCO.rds")
+
+# countries
+filtered_country_individual_bias_eci_stats_HISCO <- individual_bias_eci_stats_HISCO(filtered_country_table)
+# save the results
+saveRDS(filtered_country_individual_bias_eci_stats_HISCO, file = "../../results/economic_complexity/filtered_country_individual_bias_eci_stats_HISCO.rds")
+```
+
+We plot these as boxplots
+```{r boxplot of effects of individual biases on eci}
+for (exclude_Rome_gu in c(TRUE,FALSE)){
+  for (gu in c("province","country")) {
+  bias_tb <- get(paste0(gu,"_individual_bias_eci_stats_HISCO"))
+  #bias_tb <- get(paste0("filtered_",gu,"_individual_bias_eci_stats"))
+
+  for (bias in c("language","status","gender","agricola","research")) {
+    tb <- bias_tb[[bias]]
+    if (bias == "language"){
+      for (m in paste0("r_",max_distances[1:2])) {
+        # extract eci
+        eci_m <- tb[[m]]
+        original_eci <- bias_tb$original$eci
+        
+        # select eci values 
+        eci_values <- eci_m[,c(gu,paste0("eci_",1:100))]
+        if (exclude_Rome_gu){
+          eci_values <- eci_values[!eci_values[[gu]] %in% 
+                                     c("ITA","Latium et Campania (Regio I)"),]
+          original_eci <- original_eci[!original_eci[[gu]] %in% 
+                                         c("ITA","Latium et Campania (Regio I)"),]
+          }
+        
+        # tranform into a long df for ggplot boxplot
+        eci_long <- eci_values %>%
+          pivot_longer(cols = -gu, names_to = "sample", values_to = "eci")
+        
+        # sort the gu names in ascending order of median eci  
+        gu_order <- eci_m[[gu]][order(eci_m$median)]
+        eci_long[[gu]] <- factor(eci_long[[gu]], levels = gu_order)
+        
+        # define title
+        boxplot_title = paste0(
+          paste0("Eci by ", gu," based on ", bias," bias correction ",m),
+          ifelse(exclude_Rome_gu,", excluding Rome's region","")) 
+        
+        # define boxplot
+        eci_boxplot <- ggplot(eci_long, aes(x = !!sym(gu), y = eci)) +
+          geom_boxplot(fill= "black", alpha=0.2) +
+          geom_point(data = original_eci, 
+                     aes(x = !!sym(gu), y = eci, color = "original eci"), size = 2) +
+          scale_color_manual(values = "red", 
+                     name = "Legend", 
+                     labels = "original eci") +
+          theme_minimal() +
+          labs(title = boxplot_title, x = sym(gu), y = "eci") +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1))
+        
+        # save
+        boxplot_name <- paste0(
+          paste0(gu,"_",bias,"_bias_correction_eci_boxplot_",m,"_HISCO"),
+          ifelse(exclude_Rome_gu,"_excluding_Rome_s_region","")) 
+        # boxplot_name <- paste0(
+        #  paste0("filtered_",gu,"_",bias,"_bias_correction_eci_boxplot_",m),
+        #  ifelse(exclude_Rome_gu,"_excluding_Rome_s_region","")) 
+        plot_and_save(eci_boxplot,
+                      title = boxplot_name,
+                      height = 5,
+                      width = 10)
+      } 
+    } else {
+        # extract eci values 
+        eci_values <- tb[,c(gu,paste0("eci_",1:100))]
+        original_eci <- bias_tb$original$eci
+        
+        #select eci values
+         if (exclude_Rome_gu){
+           eci_values <- eci_values[!eci_values[[gu]] %in% 
+                                      c("ITA","Latium et Campania (Regio I)"),]
+           original_eci <- original_eci[!original_eci[[gu]] %in% 
+                                          c("ITA","Latium et Campania (Regio I)"),]
+           }
+      
+        # tranform into a long df for ggplot boxplot
+        eci_long <- eci_values %>%
+          pivot_longer(cols = -gu, names_to = "sample", values_to = "eci")
+        
+        # sort the gu names in ascending order of median eci  
+        gu_order <- tb[[gu]][order(tb$median)]
+        eci_long[[gu]] <- factor(eci_long[[gu]], levels = gu_order)
+        
+        # define title
+         boxplot_title = paste0(
+          paste0("Eci by ", gu," based on ", bias," bias correction"),
+          ifelse(exclude_Rome_gu,", excluding Rome's region","")) 
+        
+        # define boxplot
+        eci_boxplot <- ggplot(eci_long, aes(x = !!sym(gu), y = eci)) +
+          geom_boxplot(fill= "black", alpha=0.2) +
+          geom_point(data = original_eci, 
+                     aes(x = !!sym(gu), y = eci, color = "original eci"), size = 2) +
+          scale_color_manual(values = "red", 
+                     name = "Legend", 
+                     labels = "original eci") +
+          theme_minimal() +
+          labs(title = boxplot_title, x = sym(gu), y = "eci") +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1))
+        
+        # save
+        boxplot_name <- paste0(
+          paste0(gu,"_",bias,"_bias_correction_eci_boxplot_HISCO"),
+          ifelse(exclude_Rome_gu,"_excluding_Rome_s_region","")) 
+        #boxplot_name <- paste0(
+        # paste0("filtered_",gu,"_",bias,"_bias_correction_eci_boxplot"),
+        #  ifelse(exclude_Rome_gu,"_excluding_Rome_s_region","")) 
+        plot_and_save(eci_boxplot,
+                      title = boxplot_name,
+                      height = 5,
+                      width = 10)
+    }
+    print(bias)
+  }
+  print(gu)
+}
+}
+```
+
+### Combined effects of different bias corrections on eci
+We now adapt the function combining all the required correction strategies
+```{r eci stats after all bias corrections}
+# this function computes eci stats after all bias correction procedures have been applied
+all_bias_eci_stats_HISCO <- function(original_tb,
+                               language_it = 10, # cases considered
+                               status_it = 2, 
+                               gender_it = 2,
+                               agricola_it = 5,
+                               research_it = 5){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # initialise stats
+  gu_stats <- list()
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  # convert to HISCO
+  original_tb_HISCO <- table_to_HISCO(original_tb)
+  
+  # compute values for the original table
+  gu_stats$original <- economic_complexity(original_tb_HISCO)
+  
+  # loop and add
+  for (m in paste0("r_",max_distances[c(1,2)])){
+    languages_tbl_m <- get(paste0(gu_type,"_table_greek_latin_lists"))[[m]][seq_len(language_it)]
+    bias_type_m <- paste0("language_r_",m)
+    
+    for (l_it in seq_len(language_it)) {
+      tb_l_it <- languages_tbl_m[[l_it]]
+      status_tbs <- status_bias_correction_stochastic(tb_l_it,15,30,n_samples=status_it)
+      bias_type_l <- paste0(bias_type_m,"_l_it_",l_it,"_status")
+      
+      for (s_it in seq_len(status_it)) {
+        tb_s_it <- status_tbs[[s_it]]
+        gender_tbs <- lapply(gender_ratio_v, 
+                       function(gender_ratio) gender_bias(tb_s_it, gender_ratio))
+        bias_type_s <- paste0(bias_type_l,"_s_it_",s_it,"_gender")
+
+        for (g_it in seq_len(gender_it)) {
+          tb_g_it <- gender_tbs[[g_it]]
+          agricola_tbs <- lapply(seq(0,1,length.out=agricola_it),
+                         function(s) agricola_correction(tb_g_it,p=0.95,s))
+          bias_type_g <- paste0(bias_type_s,"_g_it_",g_it,"_agricola")
+
+          for (a_it in seq_len(agricola_it)) {
+            tb_a_it <- agricola_tbs[[a_it]]
+            research_tbs <- lapply(seq(0,1,length.out=research_it),
+                                   function(p) research_correction(tb_a_it,p))
+            bias_type_a <- paste0(bias_type_g,"_a_it_",a_it,"_research")
+            
+            # convert to HISCO
+            research_tbs_HISCO <- lapply(research_tbs, table_to_HISCO)
+            research_ecis <- eci_list(research_tbs_HISCO)
+            gu_stats[[bias_type_a]] <- eci_stats(research_ecis,gu_type)
+            print(bias_type_a)
+          }
+        } 
+      }
+    }
+  }
+  return(gu_stats)
+}
+
+# this function does the same, without language bias
+all_but_language_bias_eci_stats_HISCO <- function(original_tb,
+                                            status_it = 2, # cases considered
+                                            gender_it = 2,
+                                            agricola_it = 5,
+                                            research_it = 5){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # initialise stats
+  gu_stats <- list()
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  # convert to HISCO
+  original_tb_HISCO <- table_to_HISCO(original_tb)
+  
+  # compute values for the original table
+  gu_stats$original <- economic_complexity(original_tb_HISCO)
+
+  # apply status correction
+  status_tbs <- status_bias_correction_stochastic(original_tb,15,30,n_samples=status_it)
+
+  # loop and add
+  for (s_it in seq_len(status_it)) {
+    tb_s_it <- status_tbs[[s_it]]
+    gender_tbs <- lapply(gender_ratio_v, 
+                   function(gender_ratio) gender_bias(tb_s_it, gender_ratio))
+    bias_type_s <- paste0("status_s_it_",s_it,"_gender")
+
+    for (g_it in seq_len(gender_it)) {
+      tb_g_it <- gender_tbs[[g_it]]
+      agricola_tbs <- lapply(seq(0,1,length.out=agricola_it),
+                     function(s) agricola_correction(tb_g_it,p=0.95,s))
+      bias_type_g <- paste0(bias_type_s,"_g_it_",g_it,"_agricola")
+
+      for (a_it in seq_len(agricola_it)) {
+        tb_a_it <- agricola_tbs[[a_it]]
+        research_tbs <- lapply(seq(0,1,length.out=research_it),
+                               function(p) research_correction(tb_a_it,p))
+        bias_type_a <- paste0(bias_type_g,"_a_it_",a_it,"_research")
+             
+        # convert to HISCO
+        research_tbs_HISCO <- lapply(research_tbs, table_to_HISCO)
+        research_ecis <- eci_list(research_tbs_HISCO)
+        gu_stats[[bias_type_a]] <- eci_stats(research_ecis,gu_type)
+        print(bias_type_a)
+      }
+    } 
+  }
+  return(gu_stats)
+}
+```
+
+Apply all corrections
+```{r compute the stats for provinces and countries eci after all bias corrections}
+# provinces
+province_all_bias_eci_stats_HISCO <- all_bias_eci_stats_HISCO(province_table)
+# save the results
+saveRDS(province_all_bias_eci_stats_HISCO, file = "../../results/economic_complexity/province_all_bias_eci_stats_HISCO.rds")
+
+# countries
+country_all_bias_eci_stats_HISCO <- all_bias_eci_stats_HISCO(country_table)
+# save the results
+saveRDS(country_all_bias_eci_stats_HISCO, file = "../../results/economic_complexity/country_all_bias_eci_stats_HISCO.rds")
+```
+ 
+Apply all corrections but language to the filtered tables (conservative approach)
+```{r compute the stats for filtered provinces and countries eci after all but language bias corrections}
+# provinces
+filtered_province_all_but_language_bias_eci_stats_HISCO <- all_but_language_bias_eci_stats_HISCO(filtered_province_table)
+# save the results
+saveRDS(filtered_province_all_but_language_bias_eci_stats_HISCO, file = "../../results/economic_complexity/filtered_province_all_but_language_bias_eci_stats_HISCO.rds")
+
+# countries
+filtered_country_all_but_language_bias_eci_stats_HISCO <- all_but_language_bias_eci_stats_HISCO(filtered_country_table)
+# save the results
+saveRDS(filtered_country_all_but_language_bias_eci_stats_HISCO, file = "../../results/economic_complexity/filtered_country_all_but_language_bias_eci_stats_HISCO.rds")
+```
+
+### Alternative functions for eci (df as output)
+Alternative corrective functions
+```{r eci stats after all bias corrections}
+# this function computes eci stats after all bias correction procedures have been applied
+all_bias_eci_HISCO_df <- function(original_tb,
+                            language_it = 10, # cases considered
+                            status_it = 2, 
+                            gender_it = 2,
+                            agricola_it = 5,
+                            research_it = 5){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  #retrieve language tables
+  languages_tbls <- get(paste0(gu_type,"_table_greek_latin_lists"))
+  
+  # initialise bias dataframe
+  case_r_0 <- languages_tbls$r_0$it_1
+  case_r_0.001 <- languages_tbls$r_0.001$it_1
+  nrows_case_r_0 <- nrow(case_r_0[rowSums(case_r_0)>0,])
+  nrows_case_r_0.001 <- nrow(case_r_0.001[rowSums(case_r_0.001)>0,])
+
+  nrows <- language_it*status_it*gender_it*agricola_it*research_it*(nrows_case_r_0+nrows_case_r_0.001)
+  bias_df <- data.frame(matrix(NA, ncol = 8, nrow = nrows)) %>% 
+    setNames(c(gu_type,"m","l_it","s_it","g_it","a_it","r_it","eci"))
+  
+  # define indices for filling the df
+  index_start <- 1
+    
+  # loop and add
+  for (m in paste0("r_",max_distances[c(1,2)])){
+    languages_tbl_m <- languages_tbls[[m]][seq_len(language_it)]
+    nrows_case <- get(paste0("nrows_case_",m))
+    
+    for (l_it in seq_len(language_it)) {
+      tb_l_it <- languages_tbl_m[[l_it]]
+      status_tbs <- status_bias_correction_stochastic(tb_l_it,15,30,n_samples=status_it)
+
+      for (s_it in seq_len(status_it)) {
+        tb_s_it <- status_tbs[[s_it]]
+        gender_tbs <- lapply(gender_ratio_v, 
+                       function(gender_ratio) gender_bias(tb_s_it, gender_ratio))
+
+        for (g_it in seq_len(gender_it)) {
+          tb_g_it <- gender_tbs[[g_it]]
+          agricola_tbs <- lapply(seq(0,1,length.out=agricola_it),
+                         function(s) agricola_correction(tb_g_it,p=0.95,s))
+
+          for (a_it in seq_len(agricola_it)) {
+            tb_a_it <- agricola_tbs[[a_it]]
+            research_tbs <- lapply(seq(0,1,length.out=research_it),
+                                   function(p) research_correction(tb_a_it,p))
+
+            # convert to HISCO
+            research_tbs_HISCO <- lapply(research_tbs, table_to_HISCO)
+            research_ecis <- eci_list(research_tbs_HISCO)
+            
+            for (r_it in seq(research_it)){
+              eci_r_it <- research_ecis[[r_it]]
+              
+              # define end index
+              index_end <- index_start+nrows_case-1
+              
+              # update dataframes 
+              bias_df[index_start:index_end,c(gu_type,"eci")] <- eci_r_it
+              bias_df[index_start:index_end,c("m","l_it","s_it","g_it","a_it","r_it")]<-
+                rep(c(m,l_it,s_it,g_it,a_it,r_it), each = nrows_case)
+              
+              # update start index
+              # find indices
+              index_start <- index_end +1
+              
+              # check progress
+              # print(paste0(index_end," out of ",nrows))
+            }
+          }
+        } 
+      }
+    }
+  }
+  return(bias_df)
+}
+
+# this function does the same, without language bias 
+all_but_language_bias_eci_HISCO_df <- function(original_tb,
+                                            status_it = 2, # cases considered
+                                            gender_it = 2,
+                                            agricola_it = 5,
+                                            research_it = 5){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  # n_rows
+  nrow_case <- nrow(original_tb)
+  nrows <- status_it*gender_it*agricola_it*research_it*nrow_case
+  
+  # initialise result df
+  bias_df <- data.frame(matrix(NA, ncol = 6, nrow = nrows)) %>% 
+    setNames(c(gu_type,"s_it","g_it","a_it","r_it","eci"))
+  
+  # define indices for filling the df
+  index_start <- 1
+  
+  # apply status correction
+  status_tbs <- status_bias_correction_stochastic(original_tb,15,30,n_samples=status_it)
+
+  # loop and add
+  for (s_it in seq_len(status_it)) {
+    tb_s_it <- status_tbs[[s_it]]
+    gender_tbs <- lapply(gender_ratio_v, 
+                   function(gender_ratio) gender_bias(tb_s_it, gender_ratio))
+
+    for (g_it in seq_len(gender_it)) {
+      tb_g_it <- gender_tbs[[g_it]]
+      agricola_tbs <- lapply(seq(0,1,length.out=agricola_it),
+                     function(s) agricola_correction(tb_g_it,p=0.95,s))
+
+      for (a_it in seq_len(agricola_it)) {
+        tb_a_it <- agricola_tbs[[a_it]]
+        research_tbs <- lapply(seq(0,1,length.out=research_it),
+                               function(p) research_correction(tb_a_it,p))
+        
+          # convert to HISCO
+          research_tbs_HISCO <- lapply(research_tbs, table_to_HISCO)
+          research_ecis <- eci_list(research_tbs_HISCO)
+
+         for (r_it in seq(research_it)){
+              eci_r_it <- research_ecis[[r_it]]
+              
+              # define end index
+              index_end <- index_start+nrow_case-1
+              
+              # update dataframes 
+              bias_df[index_start:index_end,c(gu_type,"eci")] <- eci_r_it
+              bias_df[index_start:index_end,c("s_it","g_it","a_it","r_it")]<-
+                rep(c(s_it,g_it,a_it,r_it), each = nrow_case)
+              
+              # update start index
+              # find indices
+              index_start <- index_end +1
+              
+              print(paste0(index_end," out of ",nrows))
+            }
+        
+      }
+    } 
+  }
+  return(bias_df)
+}
+```
+
+Apply alternative corrections to the original tables
+```{r compute the eci for provinces and countries after all bias corrections}
+# provinces
+province_all_bias_eci_HISCO_df <- all_bias_eci_HISCO_df(province_table)
+# save the results
+write.csv(province_all_bias_eci_HISCO_df, file = "../../results/economic_complexity/province_all_bias_eci_df_HISCO.csv")
+
+# countries
+country_all_bias_eci_HISCO_df <- all_bias_eci_HISCO_df(country_table)
+# save the results
+write.csv(country_all_bias_eci_HISCO_df, file = "../../results/economic_complexity/country_all_bias_eci_df_HISCO.csv")
+```
+
+Apply alternative corrections but language to the filtered tables (conservative approach)
+```{r compute the eci for filtered provinces and countries after all but language bias corrections}
+# provinces
+filtered_province_all_but_language_bias_eci_HISCO_df <- all_but_language_bias_eci_HISCO_df(filtered_province_table)
+# save the results
+write.csv(filtered_province_all_but_language_bias_eci_HISCO_df, file = "../../results/economic_complexity/filtered_province_all_but_language_bias_eci_df_HISCO.csv")
+
+# countries
+filtered_country_all_but_language_bias_eci_HISCO_df <- all_but_language_bias_eci_HISCO_df(filtered_country_table)
+# save the results
+write.csv(filtered_country_all_but_language_bias_eci_HISCO_df, file = "../../results/economic_complexity/filtered_country_all_but_language_bias_eci_df_HISCO.csv")
+```
+
+### Alternative functions for occupation tables
+Produce occupation tables instead
+```{r functions for occupation tables all biases}
+# this function computes tbls after all bias correction procedures have been applied
+all_bias_tbs_HISCO <- function(original_tb,
+                           language_it = 10, # cases considered
+                            status_it = 2, 
+                            gender_it = 2,
+                            agricola_it = 5,
+                            research_it = 5){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  #retrieve language tables
+  languages_tbls <- get(paste0(gu_type,"_table_greek_latin_lists"))
+  
+  # initialise tb list
+  tbs_list <- list()
+    
+  # loop and add
+  for (m in paste0("r_",max_distances[c(1,2)])){
+    languages_tbl_m <- languages_tbls[[m]][seq_len(language_it)]
+
+    for (l_it in seq_len(language_it)) {
+      tb_l_it <- languages_tbl_m[[l_it]]
+      status_tbs <- status_bias_correction_stochastic(tb_l_it,15,30,n_samples=status_it)
+
+      for (s_it in seq_len(status_it)) {
+        tb_s_it <- status_tbs[[s_it]]
+        gender_tbs <- lapply(gender_ratio_v, 
+                       function(gender_ratio) gender_bias(tb_s_it, gender_ratio))
+
+        for (g_it in seq_len(gender_it)) {
+          tb_g_it <- gender_tbs[[g_it]]
+          agricola_tbs <- lapply(seq(0,1,length.out=agricola_it),
+                         function(s) agricola_correction(tb_g_it,p=0.95,s))
+
+          for (a_it in seq_len(agricola_it)) {
+            tb_a_it <- agricola_tbs[[a_it]]
+            research_tbs <- lapply(seq(0,1,length.out=research_it),
+                                   function(p) research_correction(tb_a_it,p))
+            
+            # convert to HISCO
+            research_tbs_HISCO <- lapply(research_tbs, table_to_HISCO)
+
+            for (r_it in seq(research_it)){
+              tb_name <- ifelse(m=="r_0","without_neighbours","with_neighbours")
+              tb_name <- paste0(tb_name,
+                                "_l_it_",l_it,
+                                "_s_it_",s_it,
+                                "_g_it_",g_it,
+                                "_a_it_",a_it,
+                                "_r_it_",r_it)
+              
+              tbs_list[[tb_name]] <- research_tbs_HISCO[[r_it]]
+            
+              # check progress
+              #print(tb_name)
+            }
+          }
+        } 
+      }
+    }
+  }
+  return(tbs_list)
+}
+
+
+# this function does the same, without language bias 
+all_but_language_tbs_HISCO<- function(original_tb,
+                                status_it = 2, # cases considered
+                                gender_it = 2,
+                                agricola_it = 5,
+                                research_it = 5){
+  # identify gu type
+  gu_type <- which_gu(original_tb)
+  
+  # ensure that the occupation table has no zero rows
+  original_tb <- original_tb[rowSums(original_tb)>0,]
+  
+  # initialise tb list
+  tbs_list <- list()
+  
+  # apply status correction
+  status_tbs <- status_bias_correction_stochastic(original_tb,15,30,n_samples=status_it)
+
+  # loop and add
+  for (s_it in seq_len(status_it)) {
+    tb_s_it <- status_tbs[[s_it]]
+    gender_tbs <- lapply(gender_ratio_v, 
+                   function(gender_ratio) gender_bias(tb_s_it, gender_ratio))
+
+    for (g_it in seq_len(gender_it)) {
+      tb_g_it <- gender_tbs[[g_it]]
+      agricola_tbs <- lapply(seq(0,1,length.out=agricola_it),
+                     function(s) agricola_correction(tb_g_it,p=0.95,s))
+
+      for (a_it in seq_len(agricola_it)) {
+        tb_a_it <- agricola_tbs[[a_it]]
+        research_tbs <- lapply(seq(0,1,length.out=research_it),
+                               function(p) research_correction(tb_a_it,p))
+        
+        # convert to HISCO
+        research_tbs_HISCO <- lapply(research_tbs, table_to_HISCO)
+         
+         for (r_it in seq(research_it)){
+              tb_name <- paste0("s_it_",s_it,
+                                "_g_it_",g_it,
+                                "_a_it_",a_it,
+                                "_r_it_",r_it)
+              
+              tbs_list[[tb_name]] <- research_tbs_HISCO[[r_it]]
+            
+              # check progress
+              #print(tb_name)
+              }
+      }
+    } 
+  }
+  return(tbs_list)
+}
+```
+
+Apply alternative corrections to the original tables
+```{r compute the tables for provinces and countries after all bias corrections}
+# provinces
+province_all_bias_tbs_HISCO <- all_bias_tbs_HISCO(province_table)
+# save the results
+saveRDS(province_all_bias_tbs_HISCO, file = "../../results/economic_complexity/province_all_bias_tbs_HISCO.rds")
+
+# countries
+country_all_bias_tbs_HISCO <- all_bias_tbs_HISCO(country_table)
+# save the results
+saveRDS(country_all_bias_tbs_HISCO, file = "../../results/economic_complexity/country_all_bias_tbs_HISCO.rds")
+```
+
+Apply alternative corrections but language to the filtered tables
+```{r compute the tables for filtered provinces and countries after all but language bias corrections}
+# provinces
+filtered_province_all_but_language_bias_tbs_HISCO <- all_but_language_tbs_HISCO(filtered_province_table)
+# save the results
+saveRDS(filtered_province_all_but_language_bias_tbs_HISCO, file = "../../results/economic_complexity/filtered_province_all_but_language_bias_tbs_HISCO.rds")
+
+# countries
+filtered_country_all_but_language_bias_tbs_HISCO <- all_but_language_tbs_HISCO(filtered_country_table)
+# save the results
+saveRDS(filtered_country_all_but_language_bias_tbs_HISCO, file = "../../results/economic_complexity/filtered_country_all_but_language_bias_tbs_HISCO.rds")
+```
+
+### Exploratory visuals
+Use the eci tables to create boxplots
+```{r ecis boxplots}
+# with all gu, and language bias (speculative)
+for (exclude_Rome_gu in c(TRUE,FALSE)) {
+  for (gu in c("province","country")) {
+     for (m in paste0("r_",max_distances[1:2])) {
+       # extract eci
+       eci_m <- get(paste0(gu,"_all_bias_eci_HISCO_df"))
+       eci_values <- eci_m[eci_m$m==m,c(gu,"eci")]
+       original_eci <- get(paste0(gu,"_all_bias_eci_stats_HISCO"))$original$eci
+        
+       # specify plot
+       boxplot_title <- paste0("Bias-corrected HISCO eci by ",gu)
+       boxplot_title <- ifelse(m=="r_0",
+                               paste0(boxplot_title,", language correction without neighbours"),
+                               paste0(boxplot_title,", language correction with neighbours"))
+
+       # select eci values 
+       if (exclude_Rome_gu){
+          eci_values <- eci_values[!eci_values[[gu]] %in% 
+                                     c("ITA","Latium et Campania (Regio I)"),]
+          original_eci <- original_eci[!original_eci[[gu]] %in% 
+                                         c("ITA","Latium et Campania (Regio I)"),]
+          boxplot_title <- paste0(boxplot_title, ", excluding Rome's region")
+       }
+       
+       
+      # define boxplot
+      eci_boxplot <- ggplot(eci_values, 
+                            aes(x = reorder(!!sym(gu), eci, FUN = median), y = eci)) +
+        geom_boxplot(fill= "black", alpha=0.2) +
+        geom_point(data = original_eci, 
+                   aes(x = !!sym(gu), y = eci, color = "original eci"), size = 2) +
+        scale_color_manual(values = "red", 
+                   name = "Legend", 
+                   labels = "original eci") +
+        theme_minimal() +
+        labs(title = boxplot_title, x = sym(gu), y = "eci") +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+          
+      # save
+      boxplot_name <- str_replace_all(boxplot_title," ","_")
+      plot_and_save(eci_boxplot,
+                    title = boxplot_name,
+                    height = 5,
+                    width = 10)
+      
+      # check progress
+      print(boxplot_name)
+    }
+  }
+}
+
+# with filtered gu, and without language (conservative)
+for (exclude_Rome_gu in c(TRUE,FALSE)) {
+  for (gu in c("province","country")) {
+    # extract eci
+     eci_values <- get(paste0("filtered_",gu,"_all_but_language_bias_eci_HISCO_df"))
+     eci_values <- eci_values[,c(gu,"eci")]
+     original_eci <- get(paste0("filtered_",gu,"_all_but_language_bias_eci_stats_HISCO"))$original$eci
+      
+     # specify plot
+     boxplot_title <- paste0("Bias-corrected HISCO eci by selected ",gu)
+
+     # select eci values 
+     if (exclude_Rome_gu){
+        eci_values <- eci_values[!eci_values[[gu]] %in% 
+                                   c("ITA","Latium et Campania (Regio I)"),]
+        original_eci <- original_eci[!original_eci[[gu]] %in% 
+                                       c("ITA","Latium et Campania (Regio I)"),]
+        boxplot_title <- paste0(boxplot_title, ", excluding Rome's region")
+     }
+     
+     
+    # define boxplot
+    eci_boxplot <- ggplot(eci_values, 
+                          aes(x = reorder(!!sym(gu), eci, FUN = median), y = eci)) +
+      geom_boxplot(fill= "black", alpha=0.2) +
+      geom_point(data = original_eci, 
+                 aes(x = !!sym(gu), y = eci, color = "original eci"), size = 2) +
+      scale_color_manual(values = "red", 
+                 name = "Legend", 
+                 labels = "original eci") +
+      theme_minimal() +
+      labs(title = boxplot_title, x = sym(gu), y = "eci") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+        
+    # save
+    boxplot_name <- str_replace_all(boxplot_title," ","_")
+    plot_and_save(eci_boxplot,
+                  title = boxplot_name,
+                  height = 5,
+                  width = 10)
+    
+    # check progress
+    print(boxplot_name)
+  }
+}
+```
+
+Plot median values of eci
+```{r median eci map plots}
+for (gu in c("province","country")) {
+  bias_tb <- get(paste0(gu,"_individual_bias_eci_stats_HISCO"))
+  
+  for (bias in c("language","status","gender","agricola","research")) {
+    tb <- bias_tb[[bias]]
+    if (bias == "language"){
+      for (m in paste0("r_",max_distances[1:2])) {
+        # extract eci
+        eci_m <- tb[[m]]
+        # extract stats
+        eci_m_median <- eci_m[,c(gu,"median")]
+        
+        if (gu == "province"){
+           map_data <- left_join(
+            provinces,
+            eci_m_median,
+            join_by(province))
+        } else if (gu == "country"){
+          map_data <- left_join(
+            world_sf,
+            eci_m_median,
+            join_by(iso3==country)) #%>% na.omit()
+        }
+        map_plot <- ggplot(data = map_data) +
+            geom_sf(aes(fill = median)) +
+             coord_sf(
+                xlim = c(-15,40), 
+                ylim = c(20,60)) +
+            scale_fill_gradient(low = "white", high = "red", name = "Value") +
+            theme_minimal() +
+            labs(title = "median eci")
+        
+        plot_and_save(map_plot,
+                      title = paste0(gu,"_",bias,"_bias_correction_",m,"_eci_median_HISCO"))
+      } 
+    } else {
+      # extract median
+      eci_median <- tb[,c(gu,"median")]
+      
+       if (gu == "province"){
+           map_data <- left_join(
+            provinces,
+            eci_median,
+            join_by(province))
+        } else if (gu == "country"){
+          map_data <- left_join(
+            world_sf,
+            eci_median,
+            join_by(iso3==country)) #%>% na.omit() 
+        }
+        map_plot <- ggplot(data = map_data) +
+            geom_sf(aes(fill = median)) +
+             coord_sf(
+                xlim = c(-15,40), 
+                ylim = c(20,60)) +
+            scale_fill_gradient(low = "white", high = "red", name = "Value") +
+            theme_minimal() +
+            labs(title = "median eci")
+        
+        plot_and_save(map_plot,
+                      title = paste0(gu,"_",bias,"_bias_correction_eci_median_HISCO"))
+    }
+    print(bias)
+  }
+  print(gu)
+}
+
+# original province
+ map_data <- left_join(
+            provinces,
+            province_individual_bias_eci_stats$original$eci,
+            join_by(province))
+ map_plot <- ggplot(data = map_data) +
+            geom_sf(aes(fill = eci)) +
+             coord_sf(
+                xlim = c(-15,40), 
+                ylim = c(20,60)) +
+            scale_fill_gradient(low = "white", high = "red", name = "Value") +
+            theme_minimal() +
+            labs(title = "original eci")
+   plot_and_save(map_plot,
+                 title = paste0("province","_","original","_eci_HISCO"))
+   
+# countries
+map_data <- left_join(
+            world_sf,
+            country_individual_bias_eci_stats_HISCO$original$eci,
+            join_by(iso3==country)) #%>% na.omit()    
+ map_plot <- ggplot(data = map_data) +
+            geom_sf(aes(fill = eci)) +
+             coord_sf(
+                xlim = c(-15,40), 
+                ylim = c(20,60)) +
+            scale_fill_gradient(low = "white", high = "red", name = "Value") +
+            theme_minimal() +
+            labs(title = "original eci")
+   plot_and_save(map_plot,
+                      title = paste0("country","_","original","_eci_HISCO"))
+```

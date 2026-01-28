@@ -2045,13 +2045,13 @@ start_table_no_zeros <- start_table[rowSums(start_table)>0,]
 table_1_no_zeros <- table_step_1[rowSums(table_step_1)>0,]
 
 # status bias
-table_step_2_min <- status_bias_correction_stochastic(table_1_no_zeros,15,30,n_samples=1)[[1]]
+table_step_2 <- status_bias_correction_stochastic(table_1_no_zeros,15,30,n_samples=1)[[1]]
 
 # gender bias
-table_step_3_min <- gender_bias(table_step_2_min,gender_ratio_v[1])
+table_step_3 <- gender_bias(table_step_2,gender_ratio_v[1])
 
 # agricola bias
-table_step_4_min <- agricola_correction(table_step_3_min,0.95,0)
+table_step_4_min <- agricola_correction(table_step_3,0.95,0)
 
 # research bias
 table_step_5_min <- research_correction(table_step_4_min,0)
