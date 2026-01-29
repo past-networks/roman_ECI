@@ -1,3 +1,4 @@
+import sys
 import glob
 import numpy as np
 import pandas as pd
@@ -89,10 +90,12 @@ if np.corrcoef(eci, diversity)[0,1] < 0:
 
 modern = mcp.reset_index().merge(pd.DataFrame(eci), left_index = True, right_index = True)[["exporter", 0]].rename(columns = {0: "eci"})
 
-df_latin = load_data("filtered_country_all_but_language_bias_eci_df")
-df_all = load_data("country_all_bias_eci_df")
+hisco_tag = "_HISCO" if sys.argv[1] == "hisco" else ""
+
+df_latin = load_data(f"filtered_country_all_but_language_bias_eci_df{hisco_tag}")
+df_all = load_data(f"country_all_bias_eci_df{hisco_tag}")
 
 print(spearmanr(df_latin["eci_rome"], df_latin["eci_modern"]))
 print(spearmanr(df_all["eci_rome"], df_all["eci_modern"]))
 
-df_latin.to_csv("tab_1.csv", sep = "\t", index = False)
+df_latin.to_csv(f"tab_2{hisco_tag}.csv", sep = "\t", index = False)
