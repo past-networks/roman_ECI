@@ -20,7 +20,7 @@ def nestedness(mcp, write = False):
    size_left = isocline.sum() / (mcp.shape[0] * mcp.shape[1])
    sum_left = 0
    for i in range(isocline.shape[0]):
-      sum_left += mcp.iloc[i].values[:isocline[i] + 1].sum()
+      sum_left += mcp.iloc[i].values[:isocline[i]].sum()
    return (sum_left / mcp.sum().sum()) / size_left
 
 hisco_tag = "_HISCO" if sys.argv[1] == "hisco" else ""
