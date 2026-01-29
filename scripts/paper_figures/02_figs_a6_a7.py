@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import pandas as pd
 
@@ -15,17 +16,19 @@ def nestedness(mcp, write = False):
    mcp_binary = mcp > 0
    isocline = mcp_binary.sum(axis = 1)
    if write:
-      isocline.reset_index().to_csv(f"fig_s5_{write}.csv", sep = "\t", index = False, header = False)
+      isocline.reset_index().to_csv(f"fig_a6_{write}.csv", sep = "\t", index = False, header = False)
    size_left = isocline.sum() / (mcp.shape[0] * mcp.shape[1])
    sum_left = 0
    for i in range(isocline.shape[0]):
       sum_left += mcp.iloc[i].values[:isocline[i] + 1].sum()
    return (sum_left / mcp.sum().sum()) / size_left
 
-mcp = pd.read_csv("fig_1_b.csv", sep = "\t", header = None)
+hisco_tag = "_HISCO" if sys.argv[1] == "hisco" else ""
+
+mcp = pd.read_csv(f"fig_2{hisco_tag}.csv", sep = "\t", header = None)
 obs_nestedness = nestedness(mcp, write = "latin")
 random_nestednesses = np.array([nestedness(randomize(mcp)) for _ in range(1000)])
-np.savetxt("fig_s6_latin.csv", random_nestednesses, fmt = "%.6f")
+np.savetxt(f"fig_a7_latin{hisco_tag}.csv", random_nestednesses, fmt = "%.6f")
 p_value = (random_nestednesses >= obs_nestedness).sum() / random_nestednesses.shape[0]
 
 print("============ Only Latin ================")
@@ -33,7 +36,7 @@ print(f"Nestedness of bias-corrected matrix (-1 = bottom-right nested, 0 = not n
 print(f"Randomized Nestedness: mean = {random_nestednesses.mean():.4f}; std = {random_nestednesses.std():.4f}; p-value of observation > random = {p_value}")
 print("========================================")
 
-mcp = pd.read_csv("fig_1_a.csv", sep = "\t", header = None)
+mcp = pd.read_csv(f"fig_7.csv", sep = "\t", header = None)
 obs_nestedness = nestedness(mcp)
 random_nestednesses = np.array([nestedness(randomize(mcp)) for _ in range(1000)])
 p_value = (random_nestednesses >= obs_nestedness).sum() / random_nestednesses.shape[0]
@@ -43,10 +46,10 @@ print(f"Nestedness of pre-correction matrix (-1 = bottom-right nested, 0 = not n
 print(f"Randomized Nestedness: mean = {random_nestednesses.mean():.4f}; std = {random_nestednesses.std():.4f}; p-value of observation > random = {p_value}")
 print("========================================")
 
-mcp = pd.read_csv("fig_s1_bottom.csv", sep = "\t", header = None)
+mcp = pd.read_csv(f"fig_a2_bottom{hisco_tag}.csv", sep = "\t", header = None)
 obs_nestedness = nestedness(mcp, write = "all")
 random_nestednesses = np.array([nestedness(randomize(mcp)) for _ in range(1000)])
-np.savetxt("fig_s6_all.csv", random_nestednesses, fmt = "%.6f")
+np.savetxt(f"fig_a7_all{hisco_tag}.csv", random_nestednesses, fmt = "%.6f")
 p_value = (random_nestednesses >= obs_nestedness).sum() / random_nestednesses.shape[0]
 
 print("============ All Provinces ================")
@@ -54,7 +57,7 @@ print(f"Nestedness of bias-corrected matrix (-1 = bottom-right nested, 0 = not n
 print(f"Randomized Nestedness: mean = {random_nestednesses.mean():.4f}; std = {random_nestednesses.std():.4f}; p-value of observation > random = {p_value}")
 print("===========================================")
 
-mcp = pd.read_csv("fig_s1_top.csv", sep = "\t", header = None)
+mcp = pd.read_csv(f"fig_a2_top.csv", sep = "\t", header = None)
 obs_nestedness = nestedness(mcp)
 random_nestednesses = np.array([nestedness(randomize(mcp)) for _ in range(1000)])
 p_value = (random_nestednesses >= obs_nestedness).sum() / random_nestednesses.shape[0]
