@@ -8,8 +8,8 @@ from functools import partial
 from scipy.cluster import hierarchy
 from matplotlib import pyplot as plt
 
-nodes = pd.read_csv("fig_2_nodes.csv", sep = "\t")
-edges = pd.read_csv("fig_2_edges.csv", sep = "\t")
+nodes = pd.read_csv("fig_4_nodes.csv", sep = "\t")
+edges = pd.read_csv("fig_4_edges.csv", sep = "\t")
 province_order = nodes.drop(["occupation", "tot"], axis = 1).columns
 
 G = nx.Graph()
@@ -31,7 +31,7 @@ sim_matrix = (1 / np.exp(distances_cpu))
 row_linkage = hierarchy.linkage(distances_cpu.values[np.triu_indices(distances_cpu.shape[0], k = 1)], optimal_ordering = True, method = "ward")
 col_linkage = hierarchy.linkage(distances_cpu.values[np.triu_indices(distances_cpu.shape[0], k = 1)], optimal_ordering = True, method = "ward")
 sns_plot = sns.clustermap(sim_matrix, row_linkage = row_linkage, col_linkage = col_linkage, cmap = "Reds_r", yticklabels = True, xticklabels = False)
-plt.savefig("fig_s8.pdf")
+plt.savefig("fig_a9.pdf")
 
 # Adaptive cut (manual)
 cluster_provinces = {
@@ -50,4 +50,4 @@ cluster_provinces = {
 gdf = gpd.read_file("../../data/economic_complexity/provinces/provinces.shp")
 gdf["cluster"] = gdf["province"].map({province: cluster for cluster in cluster_provinces for province in cluster_provinces[cluster]}).fillna(-1)
 
-gdf.to_file("fig_3.shp")
+gdf.to_file("fig_5.shp")
