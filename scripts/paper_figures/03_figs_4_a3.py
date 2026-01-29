@@ -54,10 +54,10 @@ def build_os(datafile, tag):
    df_nc_bb = bb.thresholding(df_nc, 20.5)
    df_nc_bb = reconnect_singletons(df_nc, df_nc_bb, set(mcp.columns))
    df_nc_bb = reconnect_components(df_nc, df_nc_bb)
-   df_nc_bb.to_csv(f"fig_{tag}2_edges.csv", index = False, sep = "\t")
+   df_nc_bb.to_csv(f"fig_{tag}4_edges.csv", index = False, sep = "\t")
    df_nodes = mcp.T
    df_nodes["tot"] = df_nodes.sum(axis = 1)
-   df_nodes.reset_index().to_csv(f"fig_{tag}2_nodes.csv", index = False, sep = "\t")
+   df_nodes.reset_index().to_csv(f"fig_{tag}4_nodes.csv", index = False, sep = "\t")
 
 build_os("filtered_province_all_but_language_bias_tbs", "")
-build_os("province_all_bias_tbs", "s")
+build_os("province_all_bias_tbs", "a")
