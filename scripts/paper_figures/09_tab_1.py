@@ -13,7 +13,7 @@ ecis = pd.read_csv("../../results/economic_complexity/filtered_province_all_but_
 
 provinces = set(mcp["province"])
 
-df = pd.read_csv("../../results/economic_complexity/biased_table.csv", index_col = 0)
+df = pd.read_csv("../../results/economic_complexity/province_table.csv", index_col = 0)
 
 df = df[df.index.isin(provinces)]
 
