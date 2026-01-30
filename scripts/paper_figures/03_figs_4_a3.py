@@ -3,8 +3,27 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import backboning as bb
+from scipy.linalg import eig
 
 warnings.filterwarnings("ignore", category = UserWarning)
+
+def pci(mcp):
+   mcp = pd.pivot_table(data = mcp, index = "province", columns = "occupation", values = "value")
+   mcp = mcp.loc[mcp.sum(axis = 1) > 0]
+   mcp = ((mcp / mcp.sum()).T / (mcp.sum(axis = 1) / mcp.sum().sum())).T > 1
+   ubiquity = mcp.sum(axis = 0) # Sums the number of exporters exporting the product with RCA > 1
+   diversity = mcp.sum(axis = 1) # Sums the number of products exported by the exporter with RCA > 1
+   Q = mcp / ubiquity # Column normalized M_cp
+   R = (mcp.T / diversity).T # Row normalized M_cp
+   Spp = np.dot(R.T, Q).astype(float) # Square product-product matrix
+   Spp_eigen = eig(Spp, left = True)
+   idx = Spp_eigen[0].argsort() # Numpy returns eigenvectors in random order, so we need to sort them so that we are sure we're picking the second largest
+   pci = np.real(Spp_eigen[1][:,idx][:,-2])
+   if np.corrcoef(pci, ubiquity)[0,1] > 0:
+      pci *= -1
+   pci = mcp.T.reset_index().merge(pd.DataFrame(pci), left_index = True, right_index = True)[["occupation", 0]].rename(columns = {0: "pci"})
+   pci["pci"] = (pci["pci"] - pci["pci"].mean()) / (pci["pci"].std())
+   return pci
 
 def reconnect_singletons(df, df_bb, nodes):
    additional_edges = []
@@ -45,6 +64,7 @@ def build_os(datafile, tag):
    df = df.reset_index()
    df.columns = ("occupation", "province", "value")
    mcp = df.groupby(by = ["province", "occupation"])["value"].mean().reset_index()
+   pcis = pci(mcp)
    mcp = np.log(pd.pivot_table(data = mcp, index = "province", columns = "occupation", values = "value") + 1)
    df = mcp.T.dot(mcp).unstack()
    df.index.names = ("src", "trg")
@@ -57,6 +77,7 @@ def build_os(datafile, tag):
    df_nc_bb.to_csv(f"fig_{tag}4_edges.csv", index = False, sep = "\t")
    df_nodes = mcp.T
    df_nodes["tot"] = df_nodes.sum(axis = 1)
+   df_nodes["pci"] = pcis.set_index("occupation")
    df_nodes.reset_index().to_csv(f"fig_{tag}4_nodes.csv", index = False, sep = "\t")
 
 build_os("filtered_province_all_but_language_bias_tbs", "")
