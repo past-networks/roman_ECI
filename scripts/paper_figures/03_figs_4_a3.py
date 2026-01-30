@@ -58,9 +58,9 @@ def reconnect_components(df, df_bb):
    print(additional_edges.shape[0], 1 - additional_edges["score"].mean())
    return df_bb
 
-def build_os(datafile, tag):
+def build_os(datafile, fig_number):
    dfs = rdata.read_rds(f"../../results/economic_complexity/{datafile}.rds")
-   df = pd.concat([dfs[x].to_pandas().unstack() for x in dfs if tag == "" or "without_neighbours" in x])
+   df = pd.concat([dfs[x].to_pandas().unstack() for x in dfs if fig_number == "4" or "without_neighbours" in x])
    df = df.reset_index()
    df.columns = ("occupation", "province", "value")
    mcp = df.groupby(by = ["province", "occupation"])["value"].mean().reset_index()
@@ -74,11 +74,11 @@ def build_os(datafile, tag):
    df_nc_bb = bb.thresholding(df_nc, 20.5)
    df_nc_bb = reconnect_singletons(df_nc, df_nc_bb, set(mcp.columns))
    df_nc_bb = reconnect_components(df_nc, df_nc_bb)
-   df_nc_bb.to_csv(f"fig_{tag}4_edges.csv", index = False, sep = "\t")
+   df_nc_bb.to_csv(f"fig_{fig_number}_edges.csv", index = False, sep = "\t")
    df_nodes = mcp.T
    df_nodes["tot"] = df_nodes.sum(axis = 1)
    df_nodes["pci"] = pcis.set_index("occupation")
-   df_nodes.reset_index().to_csv(f"fig_{tag}4_nodes.csv", index = False, sep = "\t")
+   df_nodes.reset_index().to_csv(f"fig_{fig_number}_nodes.csv", index = False, sep = "\t")
 
-build_os("filtered_province_all_but_language_bias_tbs", "")
-build_os("province_all_bias_tbs", "a")
+build_os("filtered_province_all_but_language_bias_tbs", "4")
+build_os("province_all_bias_tbs", "a3")
