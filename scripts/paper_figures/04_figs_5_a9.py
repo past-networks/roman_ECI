@@ -34,17 +34,17 @@ sns_plot = sns.clustermap(sim_matrix, row_linkage = row_linkage, col_linkage = c
 plt.savefig("fig_a9.pdf")
 
 # Adaptive cut (manual)
+
 cluster_provinces = {
-   -1: ["Syria", "Lusitania"],
-   0: ["Aquitania", "Belgica", "Germania Inferior", "Germania Superior", "Britannia", "Macedonia"],
-   1: ["Hispania Citerior", "Aemilia (Regio VIII)", "Etruria (Regio VII)", "Samnium (Regio IV)",
+   -1: ["Syria", "Lusitania", "Picenum (Regio V)", "Macedonia"],
+   0: ["Aquitania", "Belgica", "Germania Inferior", "Germania Superior", "Britannia",
        "Umbria (Regio VI)", "Transpadana (Regio XI)", "Venetia et Histria (Regio X)",
-       "Latium et Campania (Regio I)", "Narbonensis", "Lugdunensis", "Apulia et Calabria (Regio II)",
-       "Numidia", "Africa Proconsularis", "Baetica", "Mauretania Caesariensis"],
-   2: ["Picenum (Regio V)", "Noricum", "Pannonia Superior", "Moesia Superior", "Pannonia Inferior",
-       "Dacia", "Moesia Inferior", "Dalmatia"],
-   3: ["Mauretania Tingitana", "Raetia", "Liguria (Regio IX)", "Asia", "Sicilia"],
-   4: ["Sardinia", "Galatia", "Achaia", "Bruttium et Lucania (Regio III)"]
+       "Latium et Campania (Regio I)", "Narbonensis", "Lugdunensis", "Apulia et Calabria (Regio II)"],
+   1: ["Hispania Citerior", "Aemilia (Regio VIII)", "Etruria (Regio VII)", "Samnium (Regio IV)"],
+   2: ["Sardinia", "Numidia", "Africa Proconsularis", "Baetica", "Mauretania Caesariensis"],
+   3: ["Liguria (Regio IX)", "Asia", "Sicilia", "Mauretania Tingitana", "Raetia", "Moesia Superior",
+       "Dalmatia", "Noricum", "Pannonia Superior", "Pannonia Inferior", "Dacia", "Moesia Inferior"],
+   4: ["Galatia", "Achaia", "Bruttium et Lucania (Regio III)"]
 }
 
 gdf = gpd.read_file("../../data/economic_complexity/provinces/provinces.shp")
